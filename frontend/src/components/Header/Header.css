@@ -1,0 +1,110 @@
+/* Header.css */
+
+.header {
+    height: 34vw;
+    margin: 30px auto;
+    background: url('/header_img.png') no-repeat;
+    background-size: contain;
+    position: relative;
+}
+
+.header-contents {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.5vw;
+    max-width: 50%;
+    bottom: 10%;
+    left: 10%;
+    animation: fadeIn 3s;
+}
+
+.header-contents h2 {
+    font-weight: 500;
+    color: #ffffff;
+    font-size: max(4.5vw, 22px);
+}
+
+.header-contents p {
+    font-size: 1vw;
+    color: #ffffff;
+}
+
+.header-contents button {
+    border: none;
+    color: #747474;
+    font-weight: 600;
+    padding: 1vw 2.3vw;
+    background-color: white;
+    font-size: max(1vw, 13px);
+    border-radius: 50px;
+}
+
+@media (max-width: 1200px) {
+    .header {
+        height: 36vw;
+    }
+    .header-contents h2 {
+        font-size: 4vw;
+    }
+}
+
+@media (max-width: 1050px) {
+    .header {
+        height: 38vw;
+    }
+    .header-contents {
+        max-width: 45%;
+    }
+    .header-contents h2 {
+        font-size: 6vw;
+    }  
+}
+
+@media (max-width: 950px) {
+    .header-contents {
+        max-width: 50%;
+    }
+    .header-contents h2 {
+        font-size: 8vw;
+    }
+    .header-contents p {
+        font-size: 1.2vw;
+    }
+    .header-contents button {
+        padding: 1.5vw 3vw;
+        font-size: max(1.2vw, 14px);
+    }
+}
+
+@media (max-width: 750px) {
+    .header-contents {
+        max-width: 55%;
+    }
+    .header-contents h2 {
+        font-size: 6vw;
+    }
+    .header-contents p {
+        display: none;
+    }
+    .header-contents button {
+        padding: 2vw 4vw;
+    }
+}
+
+@media (max-width: 600px) {
+    .header {
+        height: 42vw;
+    }
+    .header-contents {
+        max-width: 60%;
+        left: 5%;
+    }
+    .header-contents h2 {
+        font-size: 5vw;
+    }
+    .header-contents button {
+        padding: 2vw 5vw;
+    }
+}

@@ -1,0 +1,85 @@
+
+.food-display {
+    margin-top: 30px;
+}
+
+.food-display h2 {
+    font-size: max(2vw, 24px);
+    font-weight: 600;
+}
+
+.food-display-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 30px;
+    margin-top: 30px;
+    row-gap: 50px;
+}
+
+/* Media Queries */
+
+/* For screens 1200px and above */
+@media (min-width: 1200px) {
+    .food-display h2 {
+        font-size: 32px;
+    }
+
+    .food-display-list {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+}
+
+/* For screens between 1050px and 1199px */
+@media (min-width: 1050px) and (max-width: 1199px) {
+    .food-display h2 {
+        font-size: 28px;
+    }
+
+    .food-display-list {
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+}
+
+/* For screens between 900px and 1049px */
+@media (min-width: 900px) and (max-width: 1049px) {
+    .food-display h2 {
+        font-size: 24px;
+    }
+
+    .food-display-list {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+}
+
+/* For screens between 750px and 899px */
+@media (min-width: 750px) and (max-width: 899px) {
+    .food-display h2 {
+        font-size: 20px;
+    }
+
+    .food-display-list {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+}
+
+/* For screens between 600px and 749px */
+@media (min-width: 600px) and (max-width: 749px) {
+    .food-display h2 {
+        font-size: 18px;
+    }
+
+    .food-display-list {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
+}
+
+/* For screens less than 600px */
+@media (max-width: 599px) {
+    .food-display h2 {
+        font-size: 16px;
+    }
+
+    .food-display-list {
+        grid-template-columns: 1fr;
+    }
+}
