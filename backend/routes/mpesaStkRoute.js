@@ -4,9 +4,9 @@ import { initiateMpesaStkPush } from "../services/mpesaStkPush.js";
 
 const mpesaStkRouter = express.Router();
 
-mpesaStkRouter.post("/mpesa_stk", async (req, res) => {
+mpesaStkRouter.post("/stk", async (req, res) => {
   // Log the request body to see what data is being received
-  console.log("Received request for /mpesa_stk:", req.body);
+  console.log("Received request for /stk:", req.body);
 
   const { userId, orderId, amount, phoneNumber } = req.body;
 

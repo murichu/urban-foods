@@ -27,10 +27,6 @@ app.use("/api/user", userRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/order", orderRouter);
 
-// Payment Routes
-app.use("/api/mpesa_stk", mpesaStkRoute);
-app.use("/api/mpesa_c2b", mpesaPayRoute);
-
 app.get("/", (req, res) => {
   res.send("API WORKING");
 });

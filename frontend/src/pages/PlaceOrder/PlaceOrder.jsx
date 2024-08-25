@@ -1,14 +1,16 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable no-unused-vars */
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import "./PlaceOrder.css";
 import { StoreContext } from "../../Context/StoreContext";
 import axios from "axios";
 
+const DELIVERY_FEE = 2;
 const PlaceOrder = () => {
   const { getTotalCartAmount, token, food_list, cartItems, url } =
     useContext(StoreContext);
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
   const [data, setData] = useState({
     firstName: "",
@@ -22,8 +24,6 @@ const PlaceOrder = () => {
     phone: "",
   });
 
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
-
   const onChangeHandler = (event) => {
     event.preventDefault();
     const name = event.target.name;
@@ -31,87 +31,53 @@ const PlaceOrder = () => {
     setData((data) => ({ ...data, [name]: value }));
   };
 
-  const onPaymentMethodChange = (event) => {
-    setSelectedPaymentMethod(event.target.value);
-  };
-
   const placeOrder = async (event) => {
     event.preventDefault();
-
-    if (!selectedPaymentMethod) {
-      alert("Please select a payment method");
-      return;
-    }
-
-    let orderItems = [];
-
-    food_list.forEach((item) => {
-      if (cartItems[item._id] > 0) {
-        let itemInfo = { ...item };
-        itemInfo["quantity"] = cartItems[item._id];
-        orderItems.push(itemInfo);
-      }
-    });
-
-    let orderData = {
-      address: data,
-      items: orderItems,
-      amount: getTotalCartAmount() + 2,
-      paymentMethod: selectedPaymentMethod,
-      phoneNumber: data.phone, // For M-Pesa
-    };
-    
-    console.log("Complete URL:", `${url}api/order/place`);
-    console.log("Order Data:", orderData);
-
     try {
-      // Place the order
-       const response = await axios.post(url + "/api/order/place", orderData, {
+      let orderItems = [];
+
+      food_list.map((item) => {
+        if (cartItems[item._id] > 0) {
+          let itemInfo = item;
+          itemInfo["quantity"] = cartItems[item._id];
+          orderItems.push(itemInfo);
+        }
+      });
+      console.log(orderItems);
+
+      // Construct the order data payload
+      let orderData = {
+        address: data,
+        items: orderItems,
+        amount: getTotalCartAmount() + DELIVERY_FEE,
+      };
+
+      console.log(orderItems);
+
+      let response = await axios.post(url + "/api/order/place", orderData, {
         headers: { token },
       });
-
+      // Handle successful response
       if (response.data.success) {
-        alert("Order placed successfully!");
-
-        // Handle M-Pesa STK Push payment process
-        if (selectedPaymentMethod === "M-Pesa STK Push") {
-          try {
-            const paymentResponse = await axios.post(
-              `${url}/api/mpesa_stk`,
-              {
-                userId: response.data.order.userId,
-                orderId: response.data.order.orderId,
-                amount: response.data.order.amount,
-                phoneNumber: data.phone,
-              },
-              {
-                headers: { token },
-              }
-            );
-
-            if (paymentResponse.data.success) {
-              alert("Payment initiated successfully. Please complete the payment on your phone.");
-              history.push("/my-orders");
-            } else {
-              alert("Payment initiation failed: " + paymentResponse.data.message);
-            }
-          } catch (error) {
-            console.error("An error occurred while initiating payment: " + error.message);
-            alert("An error occurred while initiating payment: " + error.message);
-          }
-        } else if (selectedPaymentMethod === "Cash on Delivery") {
-          history.push("/my-orders");
-        } else {
-          alert("Complete the payment process.");
-        }
+        const { session_url } = response.data;
+        navigate(session_url);
       } else {
-        alert("Failed to place order. " + response.data.message);
+        alert("Error placing order");
       }
     } catch (error) {
+      // Handle any errors that occur during the API call
       console.error("Error placing order:", error);
-      alert("An error occurred while placing the order.");
+      alert("There was an issue placing your order. Please try again.");
     }
   };
+
+  useEffect(() => {
+    if (!token) {
+      navigate("/cart");
+    } else if (getTotalCartAmount() === 0) {
+      navigate("/cart");
+    }
+  }, [token]);
 
   return (
     <form onSubmit={placeOrder} className="place-order">
@@ -208,49 +174,19 @@ const PlaceOrder = () => {
             <hr />
             <div className="cart-total-details">
               <p>Delivery fee</p>
-              <p>Ksh {getTotalCartAmount() === 0 ? 0 : 2}</p>
+              <p>Ksh {getTotalCartAmount() === 0 ? 0 : DELIVERY_FEE}</p>
             </div>
             <hr />
             <div className="cart-total-details">
               <b>Total</b>
               <b>
-                Ksh {getTotalCartAmount() === 0 ? 0 : getTotalCartAmount() + 2}
+                Ksh{" "}
+                {getTotalCartAmount() === 0
+                  ? 0
+                  : getTotalCartAmount() + DELIVERY_FEE}
               </b>
             </div>
           </div>
-        </div>
-        <div className="payment-options">
-          <p className="title">Select Payment Method</p>
-          <label>
-            <input
-              type="radio"
-              name="paymentMethod"
-              value="M-Pesa STK Push"
-              checked={selectedPaymentMethod === "M-Pesa STK Push"}
-              onChange={onPaymentMethodChange}
-            />
-            M-Pesa STK Push
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="paymentMethod"
-              value="M-Pesa Paybill Online"
-              checked={selectedPaymentMethod === "M-Pesa Paybill Online"}
-              onChange={onPaymentMethodChange}
-            />
-            M-Pesa Paybill Online
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="paymentMethod"
-              value="Cash on Delivery"
-              checked={selectedPaymentMethod === "Cash on Delivery"}
-              onChange={onPaymentMethodChange}
-            />
-            Cash on Delivery
-          </label>
         </div>
         <button type="submit">Place Order</button>
       </div>
