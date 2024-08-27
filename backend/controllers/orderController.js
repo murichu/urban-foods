@@ -1,89 +1,251 @@
-import orderModel from "../models/orderModel.js";
-import userModel from "../models/userModel.js";
-import Stripe from "stripe"; // Ensure you import Stripe correctly
-const stripe = new Stripe("your_secret_key_here"); // Replace with your actual secret key
+import axios from "axios";
+import { orderModel } from "./models/orderModel";
+import { userModel } from "./models/userModel";
 
-// delivery charge
 const DELIVERY_FEE = 2;
-// Placing user order from frontend
+
+// Token Generation function
+const getAccessToken = async () => {
+  const apiUrl =
+    "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials";
+  const headers = {
+    Authorization:
+      "Basic " +
+      Buffer.from(
+        `${process.env.CONSUMER_KEY}:${process.env.CONSUMER_SECRET}`
+      ).toString("base64"),
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const response = await axios.get(apiUrl, { headers });
+    return response.data.access_token;
+  } catch (error) {
+    console.error(
+      "Error getting access token:",
+      error.response ? error.response.data : error.message
+    );
+    throw new Error("Error getting access token");
+  }
+};
+
+// Place Order function
 const placeOrder = async (req, res) => {
-  const frontend_url = "http://localhost:5173"; // Ensure this is your actual frontend URL
+  const frontend_url = process.env.FRONTEND_URL || "http://localhost:5173";
 
   try {
     const newOrder = new orderModel({
       userId: req.body.userId,
       items: req.body.items,
-      amount: req.body.amount,
+      amount: req.body.amount + DELIVERY_FEE, // Include delivery fee
       address: req.body.address,
     });
 
     await newOrder.save();
-
-    // Clears cart data
     await userModel.findByIdAndUpdate(req.body.userId, { cartData: {} });
 
-    const line_items = req.body.items.map((item) => ({
-      price_data: {
-        currency: "KES",
-        product_data: {
-          name: item.name,
+    const accessToken = await getAccessToken();
+
+    const mpesaPayload = {
+      BusinessShortCode: process.env.BUSINESS_SHORT_CODE,
+      Password: process.env.PASSWORD,
+      Timestamp: new Date().toISOString().replace(/[-:.]/g, "").slice(0, 14),
+      TransactionType: "CustomerPayBillOnline",
+      Amount: req.body.amount + DELIVERY_FEE,
+      PartyA: req.body.phoneNumber,
+      PartyB: process.env.BUSINESS_SHORT_CODE,
+      PhoneNumber: req.body.phoneNumber,
+      CallBackURL: `${frontend_url}/mpesa/callback`,
+      AccountReference: `Order_${newOrder._id}`,
+      TransactionDesc: "Payment for Order",
+    };
+
+    const response = await axios.post(
+      "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
+      mpesaPayload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
         },
-        unit_amount: item.price * 100,
-      },
-      quantity: item.quantity,
-    }));
+      }
+    );
 
-    // Add delivery charges as a separate line item
-    line_items.push({
-      price_data: {
-        currency: "KES",
-        product_data: {
-          name: "Delivery Charges",
-        },
-        unit_amount: DELIVERY_FEE * 100, // Assuming 2 is the delivery charge
-      },
-      quantity: 1,
-    });
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card", "mpesa"], // Assuming you're using card and mpesa, replace accordingly
-      line_items: line_items,
-      mode: "payment",
-      success_url: `${frontend_url}/verify?success=true&orderId=${newOrder._id}`,
-      cancel_url: `${frontend_url}/verify?success=false&orderId=${newOrder._id}`,
-    });
-
-    res.json({ success: true, session_url: session.url });
-  } catch (error) {
-    console.error(error); // Use console.error for logging errors
-    res.status(500).json({ success: false, message: "Error saving Order" }); // Send proper HTTP status code
-  }
-};
-
-const verifyOrder = async (req, res) => {
-  const { orderId, success } = req.body;
-  try {
-    if (success == "true") {
-      await orderModel.findByIdAndUpdate(orderId, { payment: true });
-      res.json({ success: true, message: "Paid" });
+    if (response.data.ResponseCode === "0") {
+      res.json({ success: true, message: "M-Pesa STK Push initiated" });
     } else {
-      await orderModel.findByIdAndDelete(orderId);
-      res.json({ success: false, message: "Not Paid" });
+      res.status(500).json({
+        success: false,
+        message: `Error initiating M-Pesa STK Push: ${response.data.ResponseDescription}`,
+      });
     }
   } catch (error) {
-    console.error(error);
-    res.json({ success: false, message: "Error" });
+    console.error(
+      "Error in placeOrder function:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(500).json({ success: false, message: "Error saving Order" });
   }
 };
 
-//user orders for frontend
-const userOrders = async (req, res) => {
+// Handle M-Pesa Callback
+const handleCallback = async (req, res) => {
   try {
-    const orders = await orderModel.find({ userId: req.body.userId });
-    res.json({ success: true, data: orders });
+    const { Body } = req.body;
+    const { stkCallback } = Body;
+    const {
+      ResultCode,
+      ResultDesc,
+      MerchantRequestID,
+      CheckoutRequestID,
+      ResponseCode,
+    } = stkCallback;
+
+    if (ResponseCode === "0") {
+      const order = await orderModel.findOne({ _id: CheckoutRequestID });
+      if (order) {
+        order.paymentStatus = "Success";
+        await order.save();
+        res.status(200).json({ success: true, message: "Payment successful" });
+      } else {
+        res.status(404).json({ success: false, message: "Order not found" });
+      }
+    } else {
+      res
+        .status(400)
+        .json({ success: false, message: `Payment failed: ${ResultDesc}` });
+    }
   } catch (error) {
-    console.log(error);
-    res.json({ success: false, message: "Error Retrieving User Orders" });
+    console.error(
+      "Error in M-Pesa callback:",
+      error.response ? error.response.data : error.message
+    );
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-export { placeOrder, verifyOrder, userOrders };
+
+// Verify Order function
+const verifyOrder = async (req, res) => {
+  const { orderId, success } = req.body;
+
+  if (!orderId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Order ID is required" });
+  }
+
+  try {
+    if ((paymentStatus = "Success")) {
+      const updatedOrder = await orderModel.findByIdAndUpdate(
+        orderId,
+        { payment: "Paid" },
+        { new: true }
+      );
+      if (!updatedOrder) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
+      }
+      return res.status(200).json({ success: true, message: "Paid" });
+    } else {
+      const deletedOrder = await orderModel.findByIdAndDelete(orderId);
+      if (!deletedOrder) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Order not found" });
+      }
+      return res.status(200).json({ success: false, message: "Not Paid" });
+    }
+  } catch (error) {
+    console.error(error.response ? error.response.data : error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "An error occurred" });
+  }
+};
+
+// Retrieve User Orders
+const userOrders = async (req, res) => {
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "User ID is required" });
+  }
+
+  try {
+    const orders = await orderModel.find({ userId });
+
+    if (orders.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No orders found for this user" });
+    }
+
+    return res.status(200).json({ success: true, data: orders });
+  } catch (error) {
+    console.error(error.response ? error.response.data : error.message);
+    return res
+      .status(500)
+      .json({ success: false, message: "Error Retrieving User Orders" });
+  }
+};
+
+// List Orders with Pagination and Sorting
+const listOrders = async (req, res) => {
+  const {
+    page = 1,
+    limit = 10,
+    sortBy = "createdAt",
+    order = "desc",
+    search = "",
+    startDate,
+    endDate,
+  } = req.query;
+
+  try {
+    const sortOrder = order === "asc" ? 1 : -1;
+
+    // Create the filter object for MongoDB query
+    const filter = {
+      $or: [
+        { orderId: new RegExp(search, "i") },
+        { status: new RegExp(search, "i") },
+        // Add more fields if needed
+      ],
+    };
+
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
+
+    // Fetch orders with filtering, sorting, and pagination
+    const orders = await orderModel
+      .find(filter)
+      .sort({ [sortBy]: sortOrder })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit));
+
+    // Count total documents matching the filter
+    const totalOrders = await orderModel.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalOrders / limit),
+    });
+  } catch (error) {
+    console.error("Error retrieving orders:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error Retrieving All Orders",
+      error: error.message,
+    });
+  }
+};
+
+export { placeOrder, verifyOrder, userOrders, listOrders, handleCallback };

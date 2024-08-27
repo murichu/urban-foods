@@ -1,0 +1,163 @@
+/* Container styling */
+.orders-container {
+    padding: 20px;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Heading styling */
+  .orders-container h1 {
+    margin-bottom: 20px;
+  }
+  
+  /* Controls styling */
+  .controls {
+    margin-bottom: 20px;
+  }
+  
+  .controls label {
+    display: block;
+    margin-bottom: 10px;
+  }
+  
+  .controls input,
+  .controls select {
+    margin-left: 10px;
+    padding: 5px;
+    font-size: 14px;
+  }
+  
+  .controls button {
+    margin-right: 10px;
+    padding: 10px 15px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  
+  .controls button:hover {
+    background-color: #f0f0f0;
+  }
+  
+  /* Table styling */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  
+  table th,
+  table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+  
+  table th {
+    background-color: #f4f4f4;
+  }
+  
+  /* Pagination styling */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .pagination button {
+    padding: 10px 15px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  
+  .pagination button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  
+  .pagination span {
+    font-size: 14px;
+  }
+  
+  /* Loading spinner styling */
+  .spinner {
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top: 4px solid #3498db;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  /* Mobile responsiveness */
+  @media (max-width: 768px) {
+    .controls label {
+      font-size: 12px;
+    }
+  
+    .controls input,
+    .controls select {
+      font-size: 12px;
+      padding: 4px;
+    }
+  
+    .controls button {
+      font-size: 12px;
+      padding: 8px 12px;
+    }
+  
+    table th,
+    table td {
+      font-size: 12px;
+      padding: 6px;
+    }
+  
+    .pagination {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  
+    .pagination button {
+      margin-bottom: 5px;
+    }
+  
+    .pagination span {
+      margin-bottom: 5px;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .controls label {
+      font-size: 10px;
+    }
+  
+    .controls input,
+    .controls select {
+      font-size: 10px;
+      padding: 3px;
+    }
+  
+    .controls button {
+      font-size: 10px;
+      padding: 6px 10px;
+    }
+  
+    table th,
+    table td {
+      font-size: 10px;
+      padding: 4px;
+    }
+  
+    .pagination button {
+      padding: 6px 10px;
+    }
+  
+    .pagination span {
+      font-size: 12px;
+    }
+  }
+  
