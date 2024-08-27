@@ -1,6 +1,6 @@
+import orderModel from "../models/orderModel.js";
+import userModel from "../models/userModel.js";
 import axios from "axios";
-import { orderModel } from "./models/orderModel";
-import { userModel } from "./models/userModel";
 
 const DELIVERY_FEE = 2;
 
@@ -31,7 +31,8 @@ const getAccessToken = async () => {
 
 // Place Order function
 const placeOrder = async (req, res) => {
-  const frontend_url = process.env.FRONTEND_URL || "http://localhost:5173";
+  const frontend_url =
+    process.env.MPESA_CALLBACK_URL || "http://localhost:5173";
 
   try {
     const newOrder = new orderModel({
@@ -47,13 +48,13 @@ const placeOrder = async (req, res) => {
     const accessToken = await getAccessToken();
 
     const mpesaPayload = {
-      BusinessShortCode: process.env.BUSINESS_SHORT_CODE,
-      Password: process.env.PASSWORD,
+      BusinessShortCode: process.env.MPESA_SHORTCODE,
+      Password: process.env.MPESA_PASSKEY,
       Timestamp: new Date().toISOString().replace(/[-:.]/g, "").slice(0, 14),
       TransactionType: "CustomerPayBillOnline",
       Amount: req.body.amount + DELIVERY_FEE,
       PartyA: req.body.phoneNumber,
-      PartyB: process.env.BUSINESS_SHORT_CODE,
+      PartyB: process.env.MPESA_SHORTCODE,
       PhoneNumber: req.body.phoneNumber,
       CallBackURL: `${frontend_url}/mpesa/callback`,
       AccountReference: `Order_${newOrder._id}`,
