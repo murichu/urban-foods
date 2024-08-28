@@ -5,8 +5,11 @@ import { useNavigate } from "react-router-dom";
 import "./PlaceOrder.css";
 import { StoreContext } from "../../Context/StoreContext";
 import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 const DELIVERY_FEE = 2;
+
 const PlaceOrder = () => {
   const { getTotalCartAmount, token, food_list, cartItems, url } =
     useContext(StoreContext);
@@ -24,11 +27,107 @@ const PlaceOrder = () => {
     phone: "",
   });
 
+  const [isLoading, setIsLoading] = useState(false);
+
   const onChangeHandler = (event) => {
     event.preventDefault();
     const name = event.target.name;
     const value = event.target.value;
     setData((data) => ({ ...data, [name]: value }));
+  };
+
+  const MpesaStkPushSubmitted = () =>
+    toast(
+      "Mpesa Stk Push Submitted Successfully, Enter your Pin to complete the transaction",
+      {
+        position: "top-center",
+        autoClose: 2000,
+        hideProgressBar: true,
+        closeOnClick: true,
+        pauseOnHover: false,
+      }
+    );
+
+  const MpesaStkPushSuccess = () =>
+    toast.info("Mpesa Stk Push Success, transaction completed successfully");
+
+  const MpesaStkPushFailed = () =>
+    toast.error("Mpesa Stk Push Failed, Please try again", {
+      position: "top-center",
+      autoClose: 2000,
+      hideProgressBar: true,
+      closeOnClick: true,
+      pauseOnHover: false,
+    });
+
+  const StkPushCancelledByUser = () =>
+    toast.error("StkPush was rejected by the user", {
+      position: "top-center",
+      autoClose: 2000,
+      hideProgressBar: true,
+      closeOnClick: true,
+      pauseOnHover: false,
+    });
+
+  const handleMpesaStkPush = async () => {
+    try {
+      setIsLoading(true);
+      const { data: stkResponse } = await axios.post(
+        url + "/api/stkpush",
+        {
+          phone: data.phone,
+          amount: getTotalCartAmount() + DELIVERY_FEE,
+        },
+        { headers: { token } }
+      );
+
+      MpesaStkPushSubmitted();
+      console.log(stkResponse);
+      await validateTransaction(stkResponse);
+    } catch (error) {
+      console.log(error);
+      MpesaStkPushFailed();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const validateTransaction = async (payload) => {
+    const checkStatus = async () => {
+      try {
+        const { data } = await axios.post(
+          url + "/api/validate",
+          {
+            payload: {
+              MerchantRequestID: payload.MerchantRequestID,
+            },
+          },
+          { headers: { token } }
+        );
+        const transaction = data.transaction;
+        switch (transaction["ResultCode"]) {
+          case 0:
+            console.log("Transaction Successful");
+            MpesaStkPushSuccess();
+            break;
+
+          case 1032:
+            console.log("Transaction cancelled by user");
+            StkPushCancelledByUser();
+            break;
+
+          default:
+            console.log("Transaction Failed");
+            MpesaStkPushFailed();
+            await checkStatus();
+            break;
+        }
+      } catch (error) {
+        console.log(error);
+        MpesaStkPushFailed();
+      }
+    };
+    setTimeout(checkStatus, 10000);
   };
 
   const placeOrder = async (event) => {
@@ -57,15 +156,14 @@ const PlaceOrder = () => {
       let response = await axios.post(url + "/api/order/place", orderData, {
         headers: { token },
       });
+      
       // Handle successful response
       if (response.data.success) {
-        const { session_url } = response.data;
-        navigate(session_url);
+        await handleMpesaStkPush(); // Initiate M-Pesa STK Push after placing order
       } else {
         alert("Error placing order");
       }
     } catch (error) {
-      // Handle any errors that occur during the API call
       console.error("Error placing order:", error);
       alert("There was an issue placing your order. Please try again.");
     }
@@ -188,7 +286,14 @@ const PlaceOrder = () => {
             </div>
           </div>
         </div>
-        <button type="submit">Place Order</button>
+        <button type="submit" disabled={isLoading}>Place Order</button>
+        <ToastContainer />
+        {isLoading && (
+          <div className="loading-overlay">
+            <p>Loading...</p>
+            <div className="spinner"></div>
+          </div>
+        )}
       </div>
     </form>
   );
