@@ -1,6 +1,7 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import axios from "axios";
+import paymentModel from "../models/paymentModel.js"; 
 
 const DELIVERY_FEE = 2;
 
@@ -26,6 +27,29 @@ const getAccessToken = async () => {
       error.response ? error.response.data : error.message
     );
     throw new Error("Error getting access token");
+  }
+};
+
+// Save Transaction function
+const saveTransaction = async (values) => {
+  const transaction = new Transaction({
+    MerchantRequestID: values.MerchantRequestID,
+    CheckoutRequestID: values.CheckoutRequestID,
+    ResultCode: values.ResultCode,
+    ResultDesc: values.ResultDesc,
+    Amount: values.Amount,
+    MpesaReceiptNumber: values.MpesaReceiptNumber,
+    Balance: values.Balance,
+    TransactionDate: values.TransactionDate,
+    PhoneNumber: values.PhoneNumber,
+  });
+
+  try {
+    const newTransaction = await transaction.save();
+    return newTransaction;
+  } catch (err) {
+    console.error("Error saving transaction:", err.message);
+    throw new Error("Error saving transaction");
   }
 };
 
@@ -100,6 +124,10 @@ const handleCallback = async (req, res) => {
       MerchantRequestID,
       CheckoutRequestID,
       ResponseCode,
+      MpesaReceiptNumber,
+      Balance,
+      TransactionDate,
+      PhoneNumber,
     } = stkCallback;
 
     if (ResponseCode === "0") {
@@ -107,6 +135,20 @@ const handleCallback = async (req, res) => {
       if (order) {
         order.paymentStatus = "Success";
         await order.save();
+
+        // Save the transaction details
+        await saveTransaction({
+          MerchantRequestID,
+          CheckoutRequestID,
+          ResultCode,
+          ResultDesc,
+          Amount: order.amount,
+          MpesaReceiptNumber,
+          Balance,
+          TransactionDate,
+          PhoneNumber,
+        });
+
         res.status(200).json({ success: true, message: "Payment successful" });
       } else {
         res.status(404).json({ success: false, message: "Order not found" });
@@ -136,10 +178,10 @@ const verifyOrder = async (req, res) => {
   }
 
   try {
-    if ((paymentStatus = "Success")) {
+    if (success) {
       const updatedOrder = await orderModel.findByIdAndUpdate(
         orderId,
-        { payment: "Paid" },
+        { paymentStatus: "Paid" },
         { new: true }
       );
       if (!updatedOrder) {
