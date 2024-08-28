@@ -15,3 +15,4 @@ const generatePassword = (length) => {
 }
 
 exports.passkey = passkey;
+// Save us auth.js in utils folder
