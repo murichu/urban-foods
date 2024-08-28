@@ -1,7 +1,12 @@
 import mongoose from "mongoose";
 
+// Define the combined schema
 const paymentSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true,
+  },
   orderId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Order",
@@ -12,37 +17,56 @@ const paymentSchema = new mongoose.Schema({
     enum: ["mpesa_stk", "mpesa_c2b"],
     required: true,
   },
-  amount: { type: Number, required: true },
+  amount: {
+    type: Number,
+    required: true,
+  },
   status: {
     type: String,
     enum: ["pending", "completed", "failed"],
     default: "pending",
   },
-  transactionId: { type: String },
-  phoneNumber: { type: String },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-});
+  transactionId: {
+    type: String,
+  },
+  phoneNumber: {
+    type: String,
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  MerchantRequestID: {
+    type: String,
+  },
+  CheckoutRequestID: {
+    type: String,
+  },
+  ResultCode: {
+    type: Number,
+  },
+  ResultDesc: {
+    type: String,
+  },
+  MpesaReceiptNumber: {
+    type: String,
+  },
+  Balance: {
+    type: Number,
+  },
+  TransactionDate: {
+    type: Date,
+  },
+  PhoneNumber: {
+    type: Number,
+  },
+}, { timestamps: true });
 
-const paymentModel =
-  mongoose.models.payment || mongoose.model("Payment", paymentSchema);
+// Create or retrieve the existing model
+const PaymentModel = mongoose.models.PaymentModel || mongoose.model("PaymentModel", paymentSchema);
 
-export default paymentModel;
-
-const mongoose = require('mongoose');
-
-
-const transactionSchema = new mongoose.Schema({
-    MerchantRequestID: String,
-    CheckoutRequestID: String,
-    ResultCode: Number,
-    ResultDesc: String,
-    Amount: Number,
-    MpesaReceiptNumber: String,
-    Balance: Number,
-    TransactionDate: Date,
-    PhoneNumber: Number
-});
-
-
-const Transaction = mongoose.model('Transaction', transactionSchema);
+export default PaymentModel;
