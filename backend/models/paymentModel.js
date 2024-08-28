@@ -28,3 +28,21 @@ const paymentModel =
   mongoose.models.payment || mongoose.model("Payment", paymentSchema);
 
 export default paymentModel;
+
+const mongoose = require('mongoose');
+
+
+const transactionSchema = new mongoose.Schema({
+    MerchantRequestID: String,
+    CheckoutRequestID: String,
+    ResultCode: Number,
+    ResultDesc: String,
+    Amount: Number,
+    MpesaReceiptNumber: String,
+    Balance: Number,
+    TransactionDate: Date,
+    PhoneNumber: Number
+});
+
+
+const Transaction = mongoose.model('Transaction', transactionSchema);
