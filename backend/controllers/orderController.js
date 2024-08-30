@@ -1,7 +1,6 @@
 import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js";
 import axios from "axios";
-import paymentModel from "../models/paymentModel.js"; 
 
 const DELIVERY_FEE = 2;
 

@@ -6,9 +6,9 @@ import userRouter from "./routes/userRoute.js";
 import "dotenv/config";
 import cartRouter from "./routes/cartRoute.js";
 import orderRouter from "./routes/orderRoute.js";
-import authentication from './routes/authentication';
-import { errorHandler } from './middleware/errorHandler';
-import bodyParser from 'body-parser';
+import authentication from "./routes/authenticationRouter.js";
+import errorHandler from "./middleware/errorHandler.js";
+import bodyParser from "body-parser";
 
 // app config
 const app = express();
@@ -24,7 +24,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
 //static files to use css
-app.use(express.static('public'));
+app.use(express.static("public"));
 
 // api endpoint
 app.use("/api/foods", foodRouter);
@@ -33,7 +33,7 @@ app.use("/api/user", userRouter);
 app.use("/api/cart", cartRouter);
 app.use("/api/order", orderRouter);
 // Handle M-Pesa callback
-app.use('/api', authentication);
+app.use("/api", authentication);
 
 app.get("/", (req, res) => {
   res.send("API WORKING");
