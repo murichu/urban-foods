@@ -24,7 +24,10 @@ const StoreContextProvider = (props) => {
       await axios.post(
         url + "/api/cart/add",
         { itemId },
-        { headers: { token } }
+        { 
+          headers: {
+          Authorization: `Bearer ${token}`, // Ensure token is passed here
+        }, }
       );
     }
   };
@@ -36,7 +39,11 @@ const StoreContextProvider = (props) => {
       await axios.post(
         url + "/api/cart/remove",
         { itemId },
-        { headers: { token } }
+        { 
+          headers: {
+          Authorization: `Bearer ${token}`, // Ensure token is passed here
+        }, 
+      }
       );
     }
   };
@@ -66,7 +73,10 @@ const StoreContextProvider = (props) => {
     const response = await axios.post(
       url + "/api/cart/get",
       {},
-      { headers: { token } }
+      { 
+        headers: {
+        Authorization: `Bearer ${token}`, // Ensure token is passed here
+      }, }
     );
     setCartItems(response.data.cartData);
   };

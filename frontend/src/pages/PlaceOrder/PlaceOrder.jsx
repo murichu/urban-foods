@@ -78,7 +78,11 @@ const PlaceOrder = () => {
           phone: data.phone,
           amount: getTotalCartAmount() + DELIVERY_FEE,
         },
-        { headers: { token } }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, 
+          } // Ensure dToken is passed here
+        }
       );
 
       MpesaStkPushSubmitted();

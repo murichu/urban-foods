@@ -14,14 +14,19 @@ const MyOrders = () => {
     try {
       const response = await axios.post(
         url + "/api/order/user-orders",
-        {},
-        { headers: { token } }
+        {}, // Empty object as the request body
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // Ensure token is passed here
+          },
+        }
       );
-      setData(response.data.data);
+      setData(response.data.data); // Assuming `response.data.data` contains the orders
     } catch (error) {
       console.error("Error fetching orders:", error);
     }
   };
+  
 
   useEffect(() => {
     if (token) {
