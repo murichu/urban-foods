@@ -16,6 +16,14 @@
     row-gap: 50px;
 }
 
+.no-items-message {
+    text-align: center;
+    color: #888;
+    font-size: 1rem;
+    margin-top: 1rem;
+  }
+  
+
 /* Media Queries */
 
 /* For screens 1200px and above */

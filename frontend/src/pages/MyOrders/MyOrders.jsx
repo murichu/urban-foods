@@ -15,11 +15,13 @@ const MyOrders = () => {
       const response = await axios.post(
         url + "/api/order/user-orders",
         {},
-        { headers: {
-          Authorization: `Bearer ${token}`, // Ensure token is passed here
-        }, }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`, // Ensure token is passed here
+          },
+        }
       );
-      setData(response.data.data);
+      setData(Array.isArray(response.data.data) ? response.data.data : []);
     } catch (error) {
       console.error("Error fetching orders:", error);
     }
@@ -31,6 +33,15 @@ const MyOrders = () => {
     }
   }, [token]);
 
+  if (!data.length) {
+    return (
+      <div className="my-orders">
+        <h2>My Orders</h2>
+        <p>No orders found.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="my-orders">
       <h2>My Orders</h2>
@@ -39,17 +50,14 @@ const MyOrders = () => {
           <div key={index} className="my-orders-order">
             <img src={assets.parcel_icon} alt="Parcel Icon" />
             <p>
-              {order.items.map((item, itemIndex) => {
-                if (index === order.items.length - 1){
-                    return item.name+" x "+item.quantity
-                }
-                else{
-                    return item.name+" x "+item.quantity+","
-                }
+              {order.items?.map((item, itemIndex) => {
+                return `${item.name} x ${item.quantity}${
+                  itemIndex === order.items.length - 1 ? "" : ", "
+                }`;
               })}
             </p>
             <p>KES {order.amount}.00</p>
-            <p>Items: {order.items.length}</p>
+            <p>Items: {order.items?.length || 0}</p>
             <p>
               <span>&#x25cf;</span>
               <b>{order.status}</b>
