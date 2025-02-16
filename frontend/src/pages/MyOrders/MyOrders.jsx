@@ -10,7 +10,8 @@ const MyOrders = () => {
   const { url, token } = useContext(StoreContext);
   const [data, setData] = useState([]);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (e) => {
+    e.preventDefault();
     try {
       const response = await axios.post(
         url + "/api/order/user-orders",

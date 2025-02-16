@@ -69,7 +69,8 @@ const PlaceOrder = () => {
       pauseOnHover: false,
     });
 
-  const handleMpesaStkPush = async () => {
+  const handleMpesaStkPush = async (e) => {
+    e.preventDefault();
     try {
       setIsLoading(true);
       const { data: stkResponse } = await axios.post(
