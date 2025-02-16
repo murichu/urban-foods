@@ -1,11 +1,11 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/prop-types */
-import { createContext, useEffect, useState, useMemo } from "react";
+import { createContext, useEffect, useState } from "react";
 import axios from "axios";
 
 export const StoreContext = createContext(null);
 
-const StoreContextProvider = ({ children }) => {
+const StoreContextProvider = (props) => {
   const [cartItems, setCartItems] = useState({});
   const [foodList, setFoodList] = useState([]);
   const [token, setToken] = useState(null);
@@ -13,7 +13,6 @@ const StoreContextProvider = ({ children }) => {
 
   // Add to cart
   const addToCart = async (itemId) => {
-   
     setCartItems((prev) => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
 
     if (token) {
@@ -35,7 +34,6 @@ const StoreContextProvider = ({ children }) => {
 
   // Remove from cart
   const removeFromCart = async (itemId) => {
-    
     if (cartItems[itemId] > 0) {
       setCartItems((prev) => ({ ...prev, [itemId]: prev[itemId] - 1 }));
 
@@ -59,7 +57,6 @@ const StoreContextProvider = ({ children }) => {
 
   // Get total cart amount
   const getTotalCartAmount = () => {
-
     return Object.entries(cartItems).reduce((total, [itemId, quantity]) => {
       if (quantity > 0) {
         const item = foodList.find((product) => product._id === itemId);
@@ -70,8 +67,7 @@ const StoreContextProvider = ({ children }) => {
   };
 
   // Fetch food list from server
-  const fetchFoodList = async () => {
-    
+  const fetchFoodList = async () => {  
     try {
       const response = await axios.get(`${url}/api/foods/list`);
       setFoodList(response.data.data || []);
@@ -82,7 +78,6 @@ const StoreContextProvider = ({ children }) => {
 
   // Load cart data for the user
   const loadCartData = async (token) => {
-    
     try {
       const response = await axios.post(
         `${url}/api/cart/get`,
@@ -115,8 +110,7 @@ const StoreContextProvider = ({ children }) => {
   }, []);
 
   // Memoize context value to prevent unnecessary re-renders
-  const contextValue = useMemo(
-    () => ({
+  const value = {
       foodList,
       cartItems,
       addToCart,
@@ -125,13 +119,11 @@ const StoreContextProvider = ({ children }) => {
       token,
       setToken,
       url,
-    }),
-    [foodList, cartItems, token]
-  );
+   }
 
   return (
-    <StoreContext.Provider value={contextValue}>
-      {children}
+    <StoreContext.Provider value={value}>
+      {props.children}
     </StoreContext.Provider>
   );
 };

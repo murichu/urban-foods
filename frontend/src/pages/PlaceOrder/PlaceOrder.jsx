@@ -106,7 +106,10 @@ const PlaceOrder = () => {
               MerchantRequestID: payload.MerchantRequestID,
             },
           },
-          { headers: { token } }
+          { headers: {
+            Authorization: `Bearer ${token}`,
+          }, 
+        }
         );
         const transaction = data.transaction;
         switch (transaction["ResultCode"]) {
@@ -158,7 +161,9 @@ const PlaceOrder = () => {
       console.log(orderItems);
 
       let response = await axios.post(url + "/api/order/place", orderData, {
-        headers: { token },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
       
       // Handle successful response

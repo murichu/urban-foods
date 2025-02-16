@@ -11,7 +11,6 @@ const MyOrders = () => {
   const [data, setData] = useState([]);
 
   const fetchOrders = async () => {
-   
     try {
       const response = await axios.post(
         url + "/api/order/user-orders",
