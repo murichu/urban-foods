@@ -12,8 +12,8 @@ const StoreContextProvider = ({ children }) => {
   const url = "https://urban-foods-backend.vercel.app";
 
   // Add to cart
-  const addToCart = async (itemId, e) => {
-    e.preventDefault();
+  const addToCart = async (itemId) => {
+   
     setCartItems((prev) => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
 
     if (token) {
@@ -34,8 +34,8 @@ const StoreContextProvider = ({ children }) => {
   };
 
   // Remove from cart
-  const removeFromCart = async (itemId, e) => {
-    e.preventDefault();
+  const removeFromCart = async (itemId) => {
+    
     if (cartItems[itemId] > 0) {
       setCartItems((prev) => ({ ...prev, [itemId]: prev[itemId] - 1 }));
 
@@ -58,8 +58,8 @@ const StoreContextProvider = ({ children }) => {
   };
 
   // Get total cart amount
-  const getTotalCartAmount = (e) => {
-    e.preventDefault();
+  const getTotalCartAmount = () => {
+
     return Object.entries(cartItems).reduce((total, [itemId, quantity]) => {
       if (quantity > 0) {
         const item = foodList.find((product) => product._id === itemId);
@@ -70,8 +70,8 @@ const StoreContextProvider = ({ children }) => {
   };
 
   // Fetch food list from server
-  const fetchFoodList = async (e) => {
-    e.preventDefault();
+  const fetchFoodList = async () => {
+    
     try {
       const response = await axios.get(`${url}/api/foods/list`);
       setFoodList(response.data.data || []);
@@ -81,8 +81,8 @@ const StoreContextProvider = ({ children }) => {
   };
 
   // Load cart data for the user
-  const loadCartData = async (token, e) => {
-    e.preventDefault();
+  const loadCartData = async (token) => {
+    
     try {
       const response = await axios.post(
         `${url}/api/cart/get`,

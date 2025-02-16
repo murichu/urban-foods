@@ -19,12 +19,12 @@ const LoginPopup = ({ setShowLogin }) => {
   const [loading, setLoading] = useState(false); // State to handle loading state
 
   const onChangeHandler = (event) => {
+    event.preventDefault();
     const { name, value } = event.target;
     setData((data) => ({ ...data, [name]: value }));
   };
 
-  const onLogin = async (event) => {
-    event.preventDefault();
+  const onLogin = async () => {
     setLoading(true);
     setError(""); // Clear any previous errors
 

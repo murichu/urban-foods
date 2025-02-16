@@ -30,7 +30,6 @@ const PlaceOrder = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const onChangeHandler = (event) => {
-    event.preventDefault();
     const name = event.target.name;
     const value = event.target.value;
     setData((data) => ({ ...data, [name]: value }));
@@ -69,8 +68,8 @@ const PlaceOrder = () => {
       pauseOnHover: false,
     });
 
-  const handleMpesaStkPush = async (e) => {
-    e.preventDefault();
+  const handleMpesaStkPush = async () => {
+  
     try {
       setIsLoading(true);
       const { data: stkResponse } = await axios.post(
