@@ -1,5 +1,5 @@
-/* eslint-disable react/prop-types */
 import React, { useContext } from "react";
+import PropTypes from "prop-types";
 import "./FoodDisplay.css";
 import { StoreContext } from "../../Context/StoreContext";
 import FoodItem from "../FoodItem/FoodItem";
@@ -7,31 +7,32 @@ import FoodItem from "../FoodItem/FoodItem";
 const FoodDisplay = ({ category }) => {
   const { food_list } = useContext(StoreContext);
 
-  // Filter the list of food items based on the selected category
-  const filteredList =
-    food_list?.filter((item) => category === "All" || item.category === category) || [];
-
   return (
-    <div className="food-display" id="food-display">
-      <h2>Top dishes near you</h2>
-      {filteredList.length > 0 ? (
-        <div className="food-display-list">
-          {filteredList.map((item) => (
-            <FoodItem
-              key={item._id}
-              id={item._id}
-              name={item.name}
-              description={item.description}
-              price={item.price}
-              image={item.image}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="no-items-message">No food items available for the selected category.</p>
-      )}
+    <div className="food-display" id="food-display" aria-labelledby="food-display-heading">
+      <h2 id="food-display-heading">Top dishes near you</h2>
+      <div className="food-display-list">
+        {food_list && food_list.map((item) => {
+          if (category === "All" || category === item.category) {
+            return (
+              <FoodItem
+                key={item._id}
+                id={item._id}
+                name={item.name}
+                description={item.description}
+                price={item.price}
+                image={item.image}
+              />
+            );
+          }
+          return null;
+        })}
+      </div>
     </div>
   );
+};
+
+FoodDisplay.propTypes = {
+  category: PropTypes.string.isRequired,
 };
 
 export default FoodDisplay;
