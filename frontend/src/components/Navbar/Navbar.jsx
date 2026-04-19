@@ -41,19 +41,26 @@ const Navbar = ({ setShowLogin }) => {
         >
           menu
         </a>
+        <Link
+          to="/about"
+          onClick={() => setMenu("about")}
+          className={menu === "about" ? "active" : ""}
+        >
+          about
+        </Link>
+        <Link
+          to="/contact"
+          onClick={() => setMenu("contact")}
+          className={menu === "contact" ? "active" : ""}
+        >
+          contact
+        </Link>
         <a
           href="#app-download"
           onClick={() => setMenu("mobile-app")}
           className={menu === "mobile-app" ? "active" : ""}
         >
           mobile-app
-        </a>
-        <a
-          href="#footer"
-          onClick={() => setMenu("contact us")}
-          className={menu === "contact us" ? "active" : ""}
-        >
-          contact us
         </a>
       </ul>
 
@@ -71,9 +78,19 @@ const Navbar = ({ setShowLogin }) => {
           <div className="navbar-profile">
             <img src={assets.profile_icon} alt="" />
             <ul className="nav-profile-dropdown">
-              <li onClick={()=>navigate("my-orders")}>
+              <li onClick={()=>navigate("/profile")}>
+                <img src={assets.profile_icon} alt="" />
+                Profile
+              </li>
+              <hr />
+              <li onClick={()=>navigate("/my-orders")}>
                 <img src={assets.bag_icon} alt="" />
                 Orders
+              </li>
+              <hr />
+              <li onClick={()=>navigate("/favorites")}>
+                <img src={assets.rating_starts} alt="" />
+                Favorites
               </li>
               <hr />
               <li onClick={logOut}>

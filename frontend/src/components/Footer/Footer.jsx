@@ -2,6 +2,7 @@
 import React from "react";
 import "./Footer.css";
 import { assets } from "../../assets/assets";
+import { Link } from "react-router-dom";
 
 const Footer = () => {
   const currentYear = new Date().getFullYear(); // Dynamically get the current year
@@ -26,10 +27,10 @@ const Footer = () => {
         <div className="footer-content-center">
           <h2>COMPANY</h2>
           <ul>
-            <li>Home</li>
-            <li>About Us</li>
-            <li>Delivery</li>
-            <li>Privacy Policy</li>
+            <li><Link to="/">Home</Link></li>
+            <li><Link to="/about">About Us</Link></li>
+            <li><Link to="/my-orders">Delivery</Link></li>
+            <li><Link to="/contact">Privacy Policy</Link></li>
           </ul>
         </div>
         <div className="footer-content-right">

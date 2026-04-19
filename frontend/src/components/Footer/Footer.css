@@ -34,6 +34,18 @@
   cursor: pointer;
 }
 
+.footer-content-center a,
+.footer-content-right a {
+  color: #d9d9d9;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footer-content-center a:hover,
+.footer-content-right a:hover {
+  color: white;
+}
+
 .footer-content-center h2,
 .footer-content-right h2 {
   color: white;

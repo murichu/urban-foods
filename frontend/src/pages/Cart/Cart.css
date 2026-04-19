@@ -1,6 +1,7 @@
 .cart {
   margin: 50px;
 }
+
 .cart-items-title {
   display: grid;
   grid-template-columns: 1fr 1.5fr 1fr 1fr 1fr 0.5fr;
@@ -8,43 +9,52 @@
   color: grey;
   font-size: max(1vw, 12px);
 }
+
 .cart-items-item {
   margin: 10px 0px;
   color: black;
 }
+
 .cart-items-item img {
   width: 50px;
 }
+
 .cart hr {
   height: 0.5px;
   background-color: #e2e2e2;
   border: none;
 }
+
 .cart-items-item .cross {
   cursor: pointer;
   font-size: 1.2em;
   color: red;
 }
+
 .cart-bottom {
   margin: 60px;
   display: flex;
   justify-content: space-between;
   gap: max(5vw, 20px);
 }
+
 .cart-total {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 20px;
 }
+
 .cart-total-details {
   display: flex;
   justify-content: space-between;
   color: #555;
 }
+
 .cart-total hr {
   margin: 10px 0px;
 }
+
 .cart-total button {
   padding: 12px 0px;
   background-color: tomato;
@@ -54,12 +64,15 @@
   width: max(15vw, 200px);
   border-radius: 4px;
 }
+
 .cart-promocode {
   flex: 1;
 }
+
 .cart-promocode p {
   color: #555;
 }
+
 .cart-promocode-input {
   margin-top: 10px;
   display: flex;
@@ -67,12 +80,14 @@
   background-color: #eaeaea;
   border-radius: 4px;
 }
+
 .cart-promocode-input input {
   background: transparent;
   border: none;
   outline: none;
   padding-left: 10px;
 }
+
 .cart-promocode-input button {
   width: max(10vw, 100px);
   padding: 12px 5px;
@@ -82,12 +97,45 @@
   border-radius: 4px;
 }
 
+@media (max-width: 1200px) {
+  .cart {
+    margin: 40px;
+  }
+}
+
+@media (max-width: 900px) {
+  .cart {
+    margin: 30px;
+  }
+  
+  .cart-items-title {
+    grid-template-columns: 1fr 1.5fr 1fr 1fr 0.5fr;
+  }
+  
+  .cart-items-item .quantity-control {
+    display: none;
+  }
+}
+
 @media (max-width: 750px) {
   .cart-bottom {
     flex-direction: column-reverse;
   }
   .cart-promocode {
     justify-content: start;
+  }
+  
+  .cart {
+    margin: 20px;
+  }
+  
+  .cart-items-title {
+    grid-template-columns: 1fr 1fr 1fr 0.5fr;
+    font-size: 11px;
+  }
+  
+  .cart-items-item img {
+    width: 40px;
   }
 }
 
@@ -97,5 +145,70 @@
   }
   .cart-promocode {
     justify-content: start;
+  }
+  
+  .cart {
+    margin: 15px;
+  }
+  
+  .cart-items-title {
+    display: none;
+  }
+  
+  .cart-items-item {
+    display: grid;
+    grid-template-columns: 0.5fr 2fr 1fr 0.5fr;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+  }
+  
+  .cart-items-item img {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+  }
+  
+  .cart-total {
+    margin: 20px 0;
+  }
+  
+  .cart-total button {
+    width: 100%;
+    max-width: none;
+  }
+  
+  .cart-promocode-input {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .cart-promocode-input input {
+    width: 100%;
+  }
+  
+  .cart-promocode-input button {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .cart {
+    margin: 10px;
+  }
+  
+  .cart-items-item {
+    grid-template-columns: 0.5fr 2fr 0.5fr;
+    gap: 8px;
+  }
+  
+  .cart-items-item .cross {
+    font-size: 1rem;
+  }
+  
+  .cart-total-details {
+    flex-direction: column;
+    gap: 8px;
   }
 }

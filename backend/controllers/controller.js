@@ -3,8 +3,8 @@ import axios from "axios"; // Ensure axios is imported
 // Middleware to create token
 export const createToken = async (req, res, next) => {
   try {
-    const secret = process.env.consumer_secret;
-    const consumer = process.env.consumer_key;
+    const secret = process.env.MPESA_CONSUMER_SECRET;
+    const consumer = process.env.MPESA_CONSUMER_KEY;
 
     // Check if environment variables are properly set
     if (!secret || !consumer) {
@@ -158,5 +158,69 @@ export const callback = async (req, res) => {
   } catch (err) {
     console.error("Error handling callback:", err.message);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+// Validate transaction status
+export const validateTransaction = async (req, res) => {
+  try {
+    const { payload } = req.body;
+    
+    if (!payload || !payload.MerchantRequestID) {
+      return res.status(400).json({ success: false, message: "MerchantRequestID is required" });
+    }
+
+    const token = req.token;
+    if (!token) {
+      return res.status(400).json({ success: false, message: "Token is missing" });
+    }
+
+    const shortCode = "174379";
+    const passkey = "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+
+    // Generate timestamp
+    const date = new Date();
+    const timestamp =
+      date.getFullYear() +
+      ("0" + (date.getMonth() + 1)).slice(-2) +
+      ("0" + date.getDate()).slice(-2) +
+      ("0" + date.getHours()).slice(-2) +
+      ("0" + date.getMinutes()).slice(-2) +
+      ("0" + date.getSeconds()).slice(-2);
+
+    // Encode password
+    const password = Buffer.from(shortCode + passkey + timestamp).toString("base64");
+
+    const queryData = {
+      BusinessShortCode: shortCode,
+      Password: password,
+      Timestamp: timestamp,
+      CheckoutRequestID: payload.MerchantRequestID,
+    };
+
+    const queryUrl = "https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query";
+
+    const response = await axios.post(queryUrl, queryData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+
+    const responseData = response.data;
+    
+    res.status(200).json({ 
+      success: true, 
+      transaction: responseData 
+    });
+  } catch (err) {
+    console.error(
+      "Error validating transaction:",
+      err.response?.data || err.message
+    );
+    res.status(422).json({ 
+      success: false, 
+      message: "VALIDATION ERROR: " + err.message 
+    });
   }
 };
