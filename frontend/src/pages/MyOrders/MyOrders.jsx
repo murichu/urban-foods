@@ -5,9 +5,11 @@ import "./MyOrders.css";
 import { StoreContext } from "../../Context/StoreContext";
 import axios from "axios";
 import { assets } from "../../assets/assets";
+import { useNavigate } from "react-router-dom";
 
 const MyOrders = () => {
   const { url, token } = useContext(StoreContext);
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
 
   const fetchOrders = async () => {
@@ -62,7 +64,7 @@ const MyOrders = () => {
               <span>&#x25cf;</span>
               <b>{order.status}</b>
             </p>
-            <button>Track Order</button>
+            <button onClick={() => navigate(`/order-details/${order._id}`)}>Track Order</button>
           </div>
         ))}
       </div>

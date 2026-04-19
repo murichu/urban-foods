@@ -17,3 +17,17 @@
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 600px) {
+  .verify .spinner {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .verify .spinner {
+    width: 60px;
+    height: 60px;
+  }
+}

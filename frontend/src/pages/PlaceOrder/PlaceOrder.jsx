@@ -28,6 +28,7 @@ const PlaceOrder = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [mpesaSuccess, setMpesaSuccess] = useState(false);
 
   const onChangeHandler = (event) => {
     const name = event.target.name;
@@ -81,17 +82,18 @@ const PlaceOrder = () => {
         {
           headers: {
             Authorization: `Bearer ${token}`, 
-          } // Ensure dToken is passed here
+          }
         }
       );
 
       MpesaStkPushSubmitted();
       console.log(stkResponse);
+      
+      // Pass CheckoutRequestID instead of MerchantRequestID
       await validateTransaction(stkResponse);
     } catch (error) {
       console.log(error);
       MpesaStkPushFailed();
-    } finally {
       setIsLoading(false);
     }
   };
@@ -103,35 +105,54 @@ const PlaceOrder = () => {
           url + "/api/validate",
           {
             payload: {
-              MerchantRequestID: payload.MerchantRequestID,
+              CheckoutRequestID: payload.CheckoutRequestID,
             },
           },
-          { headers: {
-            Authorization: `Bearer ${token}`,
-          }, 
-        }
+          { 
+            headers: {
+              Authorization: `Bearer ${token}`,
+            }, 
+          }
         );
         const transaction = data.transaction;
-        switch (transaction["ResultCode"]) {
+        
+        // Safely extract ResultCode from nested structure
+        const resultCode = transaction.ResultCode || transaction.resultCode;
+        
+        switch (resultCode) {
           case 0:
+          case "0":
             console.log("Transaction Successful");
             MpesaStkPushSuccess();
+            setMpesaSuccess(true);
+            // Navigate to order success page after successful payment
+            setTimeout(() => {
+              navigate("/myorders", { state: { success: true } });
+            }, 2000);
             break;
 
           case 1032:
+          case "1032":
             console.log("Transaction cancelled by user");
             StkPushCancelledByUser();
+            setIsLoading(false);
             break;
 
           default:
-            console.log("Transaction Failed");
-            MpesaStkPushFailed();
-            await checkStatus();
+            console.log("Transaction Failed or Pending");
+            // Continue polling if transaction is still processing
+            if (resultCode === undefined || resultCode === null) {
+              await checkStatus();
+            } else {
+              MpesaStkPushFailed();
+              setIsLoading(false);
+            }
             break;
         }
       } catch (error) {
         console.log(error);
         MpesaStkPushFailed();
+        setIsLoading(false);
       }
     };
     setTimeout(checkStatus, 10000);

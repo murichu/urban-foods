@@ -1,0 +1,305 @@
+.about {
+  min-height: 100vh;
+  background-color: #f9f9f9;
+  padding: 40px 20px;
+}
+
+.about-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.about-container h1 {
+  font-size: 3rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.about-hero {
+  display: flex;
+  align-items: center;
+  gap: 50px;
+  background: white;
+  padding: 50px;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 40px;
+}
+
+.about-content {
+  flex: 1;
+}
+
+.about-content h2 {
+  font-size: 2rem;
+  color: #ff6b6b;
+  margin-bottom: 20px;
+}
+
+.about-content p {
+  font-size: 1.1rem;
+  color: #666;
+  line-height: 1.8;
+}
+
+.about-image {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.about-image img {
+  width: 300px;
+  height: 300px;
+  object-fit: cover;
+  border-radius: 15px;
+}
+
+.about-mission {
+  background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+  color: white;
+  padding: 50px;
+  border-radius: 15px;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.about-mission h2 {
+  font-size: 2.2rem;
+  margin-bottom: 20px;
+}
+
+.about-mission p {
+  font-size: 1.2rem;
+  line-height: 1.8;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.about-features {
+  margin-bottom: 40px;
+}
+
+.about-features h2 {
+  font-size: 2.2rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 30px;
+}
+
+.feature-card {
+  background: white;
+  padding: 30px;
+  border-radius: 15px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.feature-card img {
+  width: 60px;
+  height: 60px;
+  margin-bottom: 20px;
+}
+
+.feature-card h3 {
+  font-size: 1.3rem;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.feature-card p {
+  color: #666;
+  line-height: 1.6;
+}
+
+.about-stats {
+  margin-bottom: 40px;
+}
+
+.about-stats h2 {
+  font-size: 2.2rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 30px;
+}
+
+.stat-item {
+  background: white;
+  padding: 40px 20px;
+  border-radius: 15px;
+  text-align: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.stat-item h3 {
+  font-size: 2.5rem;
+  color: #ff6b6b;
+  margin-bottom: 10px;
+}
+
+.stat-item p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+.about-team {
+  background: white;
+  padding: 50px;
+  border-radius: 15px;
+  text-align: center;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.about-team h2 {
+  font-size: 2.2rem;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.about-team p {
+  font-size: 1.1rem;
+  color: #666;
+  line-height: 1.8;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .about-container h1 {
+    font-size: 2rem;
+  }
+
+  .about-hero {
+    flex-direction: column;
+    padding: 30px;
+  }
+
+  .about-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .about-image img {
+    width: 200px;
+    height: 200px;
+  }
+
+  .about-mission,
+  .about-team {
+    padding: 30px;
+  }
+
+  .about-mission h2,
+  .about-features h2,
+  .about-stats h2,
+  .about-team h2 {
+    font-size: 1.8rem;
+  }
+
+  .features-grid,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .about {
+    padding: 30px 15px;
+  }
+
+  .about-container h1 {
+    font-size: 1.8rem;
+    margin-bottom: 30px;
+  }
+
+  .about-hero {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .about-content h2 {
+    font-size: 1.3rem;
+    margin-bottom: 15px;
+  }
+
+  .about-content p {
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  .about-image img {
+    width: 150px;
+    height: 150px;
+  }
+
+  .about-mission,
+  .about-features,
+  .about-stats,
+  .about-team {
+    padding: 25px 20px;
+  }
+
+  .about-mission h2,
+  .about-features h2,
+  .about-stats h2,
+  .about-team h2 {
+    font-size: 1.5rem;
+    margin-bottom: 15px;
+  }
+
+  .about-mission p {
+    font-size: 1rem;
+  }
+
+  .feature-card {
+    padding: 20px;
+  }
+
+  .feature-card img {
+    width: 50px;
+    height: 50px;
+  }
+
+  .feature-card h3 {
+    font-size: 1.1rem;
+  }
+
+  .feature-card p {
+    font-size: 0.9rem;
+  }
+
+  .stat-item {
+    padding: 25px 15px;
+  }
+
+  .stat-item h3 {
+    font-size: 2rem;
+  }
+
+  .stat-item p {
+    font-size: 1rem;
+  }
+
+  .features-grid,
+  .stats-grid {
+    gap: 20px;
+  }
+}
