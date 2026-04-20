@@ -1,152 +1,211 @@
-/* eslint-disable no-unused-vars */
-import React, { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import PropTypes from 'prop-types';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { toast } from 'react-toastify';
+import { ArrowDownTrayIcon } from '../../components/icons/HeroIcons';
 import './Orders.css';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 
-const Orders = () => {
-  // State Variables
+const Orders = ({ url }) => {
   const [orders, setOrders] = useState([]);
   const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [limit] = useState(10);
   const [sortBy, setSortBy] = useState('createdAt');
-  const [order, setOrder] = useState('desc');
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [sortOrder, setSortOrder] = useState('desc');
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  // Fetch Orders
-  useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const response = await axios.get('/api/orders', {
-          params: { page, limit, sortBy, order, search: searchTerm, startDate, endDate },
-        });
-        setOrders(response.data.data || []);
-        setTotalPages(response.data.totalPages || 1);
-        toast.success('Orders fetched successfully!');
-      } catch (err) {
-        setError('Failed to retrieve orders. Please try again.');
-        toast.error('Error fetching orders!');
-      } finally {
-        setLoading(false);
+  const token = localStorage.getItem('token');
+
+  const queryParams = useMemo(
+    () => ({
+      page,
+      limit,
+      sortBy,
+      order: sortOrder,
+      search: searchTerm,
+      startDate,
+      endDate,
+    }),
+    [page, limit, sortBy, sortOrder, searchTerm, startDate, endDate],
+  );
+
+  // Centralized request function keeps effect dependencies stable and predictable.
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const { data } = await axios.get(`${url}/api/order/list`, {
+        params: queryParams,
+        headers: token ? { token } : undefined,
+      });
+
+      if (!data?.success) {
+        throw new Error(data?.message || 'Failed to load orders.');
       }
-    };
 
+      setOrders(data.data || []);
+      setTotalPages(data.totalPages || 1);
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+      toast.error('Failed to retrieve orders. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [queryParams, token, url]);
+
+  useEffect(() => {
     fetchOrders();
-  }, [page, limit, sortBy, order, searchTerm, startDate, endDate]);
+  }, [fetchOrders]);
 
-  // Event Handlers
-  const handlePageChange = (newPage) => setPage(newPage);
-  const handleSearchChange = (e) => setSearchTerm(e.target.value);
-  const handleStartDateChange = (e) => setStartDate(e.target.value);
-  const handleEndDateChange = (e) => setEndDate(e.target.value);
-  const handleSortChange = (e) => setSortBy(e.target.value);
-  const handleOrderChange = (e) => setOrder(e.target.value);
+  const exportRows = useMemo(
+    () =>
+      orders.map((order) => ({
+        ID: order._id,
+        Customer: `${order.address?.firstName || ''} ${order.address?.lastName || ''}`.trim() || 'N/A',
+        Amount: order.amount,
+        PaymentStatus: order.paymentStatus || 'Pending',
+        Status: order.status,
+        CreatedAt: new Date(order.createdAt).toLocaleString(),
+      })),
+    [orders],
+  );
 
-  // Export Functions
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(orders);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Orders');
-    XLSX.writeFile(wb, 'orders.xlsx');
-    toast.success('Orders exported to Excel!');
+    const sheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Orders');
+    XLSX.writeFile(workbook, `orders-page-${page}.xlsx`);
+    toast.success('Orders exported to Excel.');
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+    doc.text('Orders Report', 40, 30);
     doc.autoTable({
-      head: [['ID', 'Created At', 'Status']],
-      body: orders.map(order => [
-        order._id,
-        new Date(order.createdAt).toLocaleString(),
-        order.status,
+      head: [['ID', 'Customer', 'Amount', 'Payment', 'Status', 'Created']],
+      body: exportRows.map((row) => [
+        row.ID,
+        row.Customer,
+        row.Amount,
+        row.PaymentStatus,
+        row.Status,
+        row.CreatedAt,
       ]),
+      startY: 45,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [249, 115, 22] },
     });
-    doc.save('orders.pdf');
-    toast.success('Orders exported to PDF!');
+
+    doc.save(`orders-page-${page}.pdf`);
+    toast.success('Orders exported to PDF.');
   };
 
-  // Conditional Rendering
-  if (loading) return <div className="spinner"></div>;
-  if (error) return <p className="error-message">{error}</p>;
-
   return (
-    <div className="orders-container">
-      <h1>Orders</h1>
+    <section className="orders-container">
+      <header className="orders-header">
+        <h1>Orders</h1>
+        <div className="orders-actions">
+          <button type="button" onClick={exportToExcel}>
+            <ArrowDownTrayIcon className="icon-sm" />
+            <span>Excel</span>
+          </button>
+          <button type="button" onClick={exportToPDF}>
+            <ArrowDownTrayIcon className="icon-sm" />
+            <span>PDF</span>
+          </button>
+        </div>
+      </header>
 
-      {/* Controls Section */}
-      <div className="controls">
-        <label>
-          Search:
-          <input type="text" value={searchTerm} onChange={handleSearchChange} placeholder="Search orders..." />
-        </label>
-        <label>
-          Start Date:
-          <input type="date" value={startDate} onChange={handleStartDateChange} />
-        </label>
-        <label>
-          End Date:
-          <input type="date" value={endDate} onChange={handleEndDateChange} />
-        </label>
-        <label>
-          Sort By:
-          <select value={sortBy} onChange={handleSortChange}>
-            <option value="createdAt">Created At</option>
-            <option value="updatedAt">Updated At</option>
-          </select>
-        </label>
-        <label>
-          Order:
-          <select value={order} onChange={handleOrderChange}>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
-          </select>
-        </label>
-        <button onClick={exportToExcel}>Export to Excel</button>
-        <button onClick={exportToPDF}>Export to PDF</button>
+      <div className="controls" role="group" aria-label="Order filters">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by id or status"
+        />
+        <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <option value="createdAt">Created</option>
+          <option value="amount">Amount</option>
+          <option value="status">Status</option>
+          <option value="paymentStatus">Payment</option>
+        </select>
+        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}>
+          <option value="desc">Newest</option>
+          <option value="asc">Oldest</option>
+        </select>
       </div>
 
-      {/* Orders Table */}
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Created At</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {orders.map(order => (
-            <tr key={order._id}>
-              <td>{order._id}</td>
-              <td>{new Date(order.createdAt).toLocaleString()}</td>
-              <td>{order.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {loading ? (
+        <div className="spinner" aria-label="Loading orders" />
+      ) : (
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.length > 0 ? (
+                orders.map((order) => (
+                  <tr key={order._id}>
+                    <td>{order._id}</td>
+                    <td>{`${order.address?.firstName || ''} ${order.address?.lastName || ''}`.trim() || 'N/A'}</td>
+                    <td>${Number(order.amount).toFixed(2)}</td>
+                    <td>{order.paymentStatus || 'Pending'}</td>
+                    <td>{order.status}</td>
+                    <td>{new Date(order.createdAt).toLocaleString()}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" className="empty-state">
+                    No orders found for the selected filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {/* Pagination Controls */}
-      <div className="pagination">
-        <button disabled={page <= 1} onClick={() => handlePageChange(1)}>First</button>
-        <button disabled={page <= 1} onClick={() => handlePageChange(page - 1)}>Previous</button>
-        <span>Page {page} of {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => handlePageChange(page + 1)}>Next</button>
-        <button disabled={page >= totalPages} onClick={() => handlePageChange(totalPages)}>Last</button>
-      </div>
-
-      <ToastContainer />
-    </div>
+      <footer className="pagination">
+        <button type="button" disabled={page <= 1} onClick={() => setPage(1)}>
+          First
+        </button>
+        <button type="button" disabled={page <= 1} onClick={() => setPage((prev) => prev - 1)}>
+          Previous
+        </button>
+        <span>
+          Page {page} of {totalPages}
+        </span>
+        <button type="button" disabled={page >= totalPages} onClick={() => setPage((prev) => prev + 1)}>
+          Next
+        </button>
+        <button type="button" disabled={page >= totalPages} onClick={() => setPage(totalPages)}>
+          Last
+        </button>
+      </footer>
+    </section>
   );
+};
+
+Orders.propTypes = {
+  url: PropTypes.string.isRequired,
 };
 
 export default Orders;
