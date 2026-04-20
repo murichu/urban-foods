@@ -1,105 +1,115 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable react/prop-types */
-import { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useState, useMemo } from "react";
 import axios from "axios";
 
 export const StoreContext = createContext(null);
 
-const StoreContextProvider = (props) => {
+const StoreContextProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState({});
   const [foodList, setFoodList] = useState([]);
-  const [token, setToken] = useState(null);
-  const url = "https://urban-foods-backend.vercel.app";
+  const [token, setToken] = useState("");
+
+  const url = import.meta.env.VITE_API_BASE_URL;
+
+  // Axios instance (cleaner API calls)
+  const api = useMemo(() => {
+    return axios.create({
+      baseURL: url,
+    });
+  }, [url]);
 
   // Add to cart
   const addToCart = async (itemId) => {
-    setCartItems((prev) => ({ ...prev, [itemId]: (prev[itemId] || 0) + 1 }));
+    setCartItems((prev) => ({
+      ...prev,
+      [itemId]: (prev[itemId] || 0) + 1,
+    }));
 
-    if (token) {
-      try {
-        await axios.post(
-          `${url}/api/cart/add`,
-          { itemId },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-      } catch (error) {
-        console.error("Failed to add to cart:", error);
-      }
+    if (!token) return;
+
+    try {
+      await api.post(
+        "/api/cart/add",
+        { itemId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+    } catch (error) {
+      console.error("Failed to add to cart:", error);
     }
   };
 
   // Remove from cart
   const removeFromCart = async (itemId) => {
-    if (cartItems[itemId] > 0) {
-      setCartItems((prev) => ({ ...prev, [itemId]: prev[itemId] - 1 }));
+    const currentQty = cartItems[itemId] || 0;
 
-      if (token) {
-        try {
-          await axios.post(
-            `${url}/api/cart/remove`,
-            { itemId },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-        } catch (error) {
-          console.error("Failed to remove from cart:", error);
+    if (currentQty <= 0) return;
+
+    setCartItems((prev) => ({
+      ...prev,
+      [itemId]: prev[itemId] - 1,
+    }));
+
+    if (!token) return;
+
+    try {
+      await api.post(
+        "/api/cart/remove",
+        { itemId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-      }
+      );
+    } catch (error) {
+      console.error("Failed to remove from cart:", error);
     }
   };
 
-  // Get total cart amount
+  // Total cart amount
   const getTotalCartAmount = () => {
-    return Object.entries(cartItems).reduce((total, [itemId, quantity]) => {
-      if (quantity > 0) {
-        const item = foodList.find((product) => product._id === itemId);
-        return item ? total + item.price * quantity : total;
+    return Object.entries(cartItems).reduce((total, [itemId, qty]) => {
+      if (qty > 0) {
+        const item = foodList.find((f) => f._id === itemId);
+        return item ? total + item.price * qty : total;
       }
       return total;
     }, 0);
   };
 
-  // Fetch food list from server
-  const fetchFoodList = async () => {  
+  // Fetch food list
+  const fetchFoodList = async () => {
     try {
-      const response = await axios.get(`${url}/api/foods/list`);
+      const response = await api.get("/api/foods/list");
       setFoodList(response.data.data || []);
     } catch (error) {
       console.error("Failed to fetch food list:", error);
     }
   };
 
-  // Load cart data for the user
-  const loadCartData = async (token) => {
+  // Load cart data
+  const loadCartData = async (authToken) => {
     try {
-      const response = await axios.post(
-        `${url}/api/cart/get`,
+      const response = await api.post(
+        "/api/cart/get",
         {},
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${authToken}` },
         }
       );
+
       setCartItems(response.data.cartData || {});
     } catch (error) {
       console.error("Failed to load cart data:", error);
     }
   };
 
-  // Load initial data and cart when component mounts
+  // Initial load
   useEffect(() => {
     const loadData = async () => {
       await fetchFoodList();
 
-      const savedToken = localStorage?.getItem("token");
+      const savedToken = localStorage.getItem("token");
+
       if (savedToken) {
         setToken(savedToken);
         await loadCartData(savedToken);
@@ -107,23 +117,22 @@ const StoreContextProvider = (props) => {
     };
 
     loadData();
-  }, []);
+  }, [url]);
 
-  // Memoize context value to prevent unnecessary re-renders
   const value = {
-      foodList,
-      cartItems,
-      addToCart,
-      removeFromCart,
-      getTotalCartAmount,
-      token,
-      setToken,
-      url,
-   }
+    foodList,
+    cartItems,
+    addToCart,
+    removeFromCart,
+    getTotalCartAmount,
+    token,
+    setToken,
+    url,
+  };
 
   return (
     <StoreContext.Provider value={value}>
-      {props.children}
+      {children}
     </StoreContext.Provider>
   );
 };

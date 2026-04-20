@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import React, { useContext, useState } from "react";
 import PropTypes from "prop-types";
 import "./LoginPopup.css";
@@ -15,32 +14,44 @@ const LoginPopup = ({ setShowLogin }) => {
     email: "",
     password: "",
   });
-  const [error, setError] = useState(""); // State to handle error messages
-  const [loading, setLoading] = useState(false); // State to handle loading state
 
-  const onChangeHandler = (event) => {
-    const { name, value } = event.target;
-    setData((data) => ({ ...data, [name]: value }));
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const onChangeHandler = (e) => {
+    const { name, value } = e.target;
+    setData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const onLogin = async () => {
-    setLoading(true);
-    setError(""); // Clear any previous errors
+  const onSubmitHandler = async (e) => {
+    e.preventDefault(); // IMPORTANT: prevents page refresh
 
-    let newUrl = `${url}/api/user/${currState === "Login" ? "login" : "register"}`;
+    setLoading(true);
+    setError("");
+
+    const endpoint =
+      currState === "Login" ? "login" : "register";
 
     try {
-      const response = await axios.post(newUrl, data);
+      const response = await axios.post(
+        `${url}/api/user/${endpoint}`,
+        data
+      );
 
       if (response.data.success) {
-        setToken(response.data.token);
-        localStorage.setItem("token", response.data.token);
+        const token = response.data.token;
+
+        setToken(token);
+        localStorage.setItem("token", token);
         setShowLogin(false);
       } else {
-        setError(response.data.message || "An unknown error occurred");
+        setError(response.data.message || "Something went wrong");
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to connect to the server.");
+      setError(
+        err.response?.data?.message ||
+          "Unable to connect to server"
+      );
     } finally {
       setLoading(false);
     }
@@ -48,67 +59,78 @@ const LoginPopup = ({ setShowLogin }) => {
 
   return (
     <div className="login-popup">
-      <form onSubmit={onLogin} className="login-popup-container">
+      <form onSubmit={onSubmitHandler} className="login-popup-container">
         <div className="login-popup-title">
           <h2>{currState}</h2>
           <img
-            onClick={() => setShowLogin(false)}
             src={assets.cross_icon}
             alt="Close"
+            onClick={() => setShowLogin(false)}
             role="button"
-            tabIndex={0}
           />
         </div>
+
         <div className="login-popup-inputs">
           {currState === "Sign Up" && (
             <input
-              id="name"
               name="name"
-              onChange={onChangeHandler}
               value={data.name}
+              onChange={onChangeHandler}
               type="text"
               placeholder="Your name"
               required
             />
           )}
+
           <input
-            id="email"
             name="email"
-            onChange={onChangeHandler}
             value={data.email}
+            onChange={onChangeHandler}
             type="email"
             placeholder="Your email"
             required
           />
+
           <input
-            id="password"
             name="password"
-            onChange={onChangeHandler}
             value={data.password}
+            onChange={onChangeHandler}
             type="password"
             placeholder="Password"
             required
           />
         </div>
-        {error && <p className="error-message">{error}</p>} {/* Display error message */}
+
+        {error && <p className="error-message">{error}</p>}
+
         <button type="submit" disabled={loading}>
-          {loading ? "Processing..." : currState === "Sign Up" ? "Create account" : "Login"}
+          {loading
+            ? "Processing..."
+            : currState === "Sign Up"
+            ? "Create account"
+            : "Login"}
         </button>
+
         <div className="login-popup-condition">
-          <input id="terms" type="checkbox" required />
-          <label htmlFor="terms">
+          <input type="checkbox" required />
+          <label>
             By continuing, I agree to the terms of use & privacy policy
           </label>
         </div>
+
         {currState === "Login" ? (
           <p>
-            Create a new account?
-            <span onClick={() => setCurrState("Sign Up")}> Click here</span>
+            Create a new account?{" "}
+            <span onClick={() => setCurrState("Sign Up")}>
+              Click here
+            </span>
           </p>
         ) : (
           <p>
-            Already have an account?
-            <span onClick={() => setCurrState("Login")}>Login here</span>
+            Already have an account?{" "}
+            <span onClick={() => setCurrState("Login")}>
+              Login here
+            </span>
           </p>
         )}
       </form>
