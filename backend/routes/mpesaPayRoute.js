@@ -1,29 +1,29 @@
-import express from "express";
-import Payment from "../models/paymentModel.js";
-import { initiateMpesaC2B } from "../services/mpesaPay.js";
+import express from 'express';
+import Payment from '../models/paymentModel.js';
+import { initiateMpesaC2B } from '../services/mpesaService.js';
 
 const mpesapaybillRouter = express.Router();
 
-mpesapaybillRouter.post("/mpesa_c2b", async (req, res) => {
+mpesapaybillRouter.post('/mpesa_c2b', async (req, res) => {
   const { userId, orderId, amount, phoneNumber } = req.body;
 
   try {
     const payment = new Payment({
       userId,
       orderId,
-      method: "mpesa_c2b",
+      method: 'mpesa_c2b',
       amount,
       phoneNumber,
-      status: "pending",
+      status: 'pending',
     });
 
     const mpesaResponse = await initiateMpesaC2B(amount, phoneNumber, orderId);
 
-    if (mpesaResponse.ResponseCode === "0") {
-      payment.status = "completed";
+    if (mpesaResponse.ResponseCode === '0') {
+      payment.status = 'completed';
       payment.transactionId = mpesaResponse.ConversationID;
     } else {
-      payment.status = "failed";
+      payment.status = 'failed';
     }
 
     await payment.save();
@@ -31,7 +31,7 @@ mpesapaybillRouter.post("/mpesa_c2b", async (req, res) => {
   } catch (error) {
     res
       .status(500)
-      .json({ success: false, message: "M-Pesa C2B failed", error });
+      .json({ success: false, message: 'M-Pesa C2B failed', error });
   }
 });
 
