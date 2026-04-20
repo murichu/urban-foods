@@ -1,28 +1,28 @@
-/* eslint-disable no-unused-vars */
-import React from "react";
-import "./Sidebar.css";
-import { assets } from "../../assets/assets";
-import { NavLink } from "react-router-dom";
+import { NavLink } from 'react-router-dom';
+import {
+  ClipboardDocumentListIcon,
+  PlusCircleIcon,
+  TruckIcon,
+} from '../icons/HeroIcons';
+import './Sidebar.css';
 
-const Sidebar = () => {
-  return (
-    <div className="sidebar">
-      <div className="sidebar-options">
-        <NavLink to="/add" className="sidebar-option">
-          <img src={assets.add_icon} alt="" />
-          <p>Add Items</p>
+const navItems = [
+  { to: '/add', label: 'Add Items', Icon: PlusCircleIcon },
+  { to: '/list', label: 'List Items', Icon: ClipboardDocumentListIcon },
+  { to: '/orders', label: 'Orders', Icon: TruckIcon },
+];
+
+const Sidebar = () => (
+  <aside className="sidebar" aria-label="Admin navigation">
+    <nav className="sidebar-options">
+      {navItems.map(({ to, label, Icon }) => (
+        <NavLink key={to} to={to} className="sidebar-option">
+          <Icon className="icon-sm" />
+          <p>{label}</p>
         </NavLink>
-        <NavLink to="/list" className="sidebar-option">
-          <img src={assets.order_icon} alt="" />
-          <p>List Items</p>
-        </NavLink>
-        <NavLink to="/orders" className="sidebar-option">
-          <img src={assets.add_icon} alt="" />
-          <p>Order</p>
-        </NavLink>
-      </div>
-    </div>
-  );
-};
+      ))}
+    </nav>
+  </aside>
+);
 
 export default Sidebar;

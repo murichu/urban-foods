@@ -6,6 +6,9 @@ import path from 'path';
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 
+// Resolve uploads directory from current backend process working directory.
+const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
+
 /**
  * Validate file type and size
  */
@@ -13,21 +16,21 @@ const validateFile = (file) => {
   if (!file) {
     return { valid: false, message: 'No file uploaded' };
   }
-  
+
   if (!ALLOWED_FILE_TYPES.includes(file.mimetype)) {
-    return { 
-      valid: false, 
-      message: 'Invalid file type. Only JPEG, PNG, and WebP are allowed' 
+    return {
+      valid: false,
+      message: 'Invalid file type. Only JPEG, PNG, and WebP are allowed'
     };
   }
-  
+
   if (file.size > MAX_FILE_SIZE) {
-    return { 
-      valid: false, 
-      message: 'File too large. Maximum size is 5MB' 
+    return {
+      valid: false,
+      message: 'File too large. Maximum size is 5MB'
     };
   }
-  
+
   return { valid: true };
 };
 
@@ -45,44 +48,44 @@ const addFood = async (req, res) => {
   try {
     // Validate file
     if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Image file is required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Image file is required'
       });
     }
-    
+
     const validation = validateFile(req.file);
     if (!validation.valid) {
       // Delete the invalid file
       fs.unlink(req.file.path, () => {});
-      return res.status(400).json({ 
-        success: false, 
-        message: validation.message 
+      return res.status(400).json({
+        success: false,
+        message: validation.message
       });
     }
-    
+
     // Validate required fields
     const { name, description, price, category } = req.body;
-    
+
     if (!name || !description || !price || !category) {
       fs.unlink(req.file.path, () => {});
-      return res.status(400).json({ 
-        success: false, 
-        message: 'All fields (name, description, price, category) are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'All fields (name, description, price, category) are required'
       });
     }
-    
+
     // Validate price
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum <= 0) {
       fs.unlink(req.file.path, () => {});
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Price must be a positive number' 
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be a positive number'
       });
     }
-    
-    let image_filename = sanitizeFilename(`${req.file.filename}`);
+
+    const image_filename = sanitizeFilename(`${req.file.filename}`);
 
     const food = new foodModel({
       name: name.trim(),
@@ -93,22 +96,22 @@ const addFood = async (req, res) => {
     });
 
     await food.save();
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: 'Food Added Successfully',
       data: food
     });
   } catch (error) {
     console.error('Add food error:', error.message);
-    
+
     // Clean up file if save fails
     if (req.file && req.file.path) {
       fs.unlink(req.file.path, () => {});
     }
-    
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error While Adding Food' 
+
+    res.status(500).json({
+      success: false,
+      message: 'Error While Adding Food'
     });
   }
 };
@@ -126,9 +129,9 @@ const listFood = async (req, res) => {
     });
   } catch (error) {
     console.error('List food error:', error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error fetching food items' 
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching food items'
     });
   }
 };
@@ -140,23 +143,25 @@ const removeFood = async (req, res) => {
   try {
     // Validate ObjectId format
     if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid food ID format' 
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid food ID format'
       });
     }
-    
+
     const food = await foodModel.findById(req.params.id);
 
     if (!food) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Food item not found' 
+      return res.status(404).json({
+        success: false,
+        message: 'Food item not found'
       });
     }
 
-    // Safely delete the associated image file
-    const imagePath = path.join(__dirname, '..', 'uploads', food.image);
+    // Use basename to ensure we never resolve outside uploads when deleting file.
+    const safeImageName = path.basename(food.image);
+    const imagePath = path.join(UPLOADS_DIR, safeImageName);
+
     fs.unlink(imagePath, (error) => {
       if (error && error.code !== 'ENOENT') {
         console.error(`Error deleting image file: ${error.message}`);
@@ -164,15 +169,15 @@ const removeFood = async (req, res) => {
     });
 
     await foodModel.findByIdAndDelete(req.params.id);
-    res.status(200).json({ 
-      success: true, 
-      message: 'Food Removed Successfully' 
+    res.status(200).json({
+      success: true,
+      message: 'Food Removed Successfully'
     });
   } catch (error) {
     console.error('Remove food error:', error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Error Removing Food' 
+    res.status(500).json({
+      success: false,
+      message: 'Error Removing Food'
     });
   }
 };
