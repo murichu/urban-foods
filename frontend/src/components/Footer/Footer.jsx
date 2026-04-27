@@ -4,6 +4,7 @@ import "./Footer.css";
 import { assets } from "../../assets/assets";
 import { Link } from "react-router-dom";
 
+
 const Footer = () => {
   const currentYear = new Date().getFullYear(); // Dynamically get the current year
 

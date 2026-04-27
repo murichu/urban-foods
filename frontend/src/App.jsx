@@ -14,6 +14,9 @@ import About from "./pages/About/About";
 import Contact from "./pages/Contact/Contact";
 import Favorites from "./pages/Favorites/Favorites";
 import OrderDetails from "./pages/OrderDetails/OrderDetails";
+import Payments from "./pages/Payments/Payments";
+import Notifications from "./pages/Notifications/Notifications";
+import Settings from "./pages/Settings/Settings";
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -37,6 +40,9 @@ const App = () => {
           <Route path="/contact" element={<Contact />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/order-details/:orderId" element={<OrderDetails />} />
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </div>
       <Footer />

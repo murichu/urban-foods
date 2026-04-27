@@ -1,8 +1,12 @@
+import logger from '../config/logger.js';
+
 const errorHandler = (err, req, res, next) => {
   const statusCode = res.statusCode ? res.statusCode : 500;
-  res.status(statusCode);
+  
+  // Log error using Winston
+  logger.error(`${err.message} - ${req.method} ${req.url} - ${req.ip} - ${err.stack}`);
 
-  res.json({
+  res.status(statusCode).json({
     message: err.message,
     stack: process.env.NODE_ENV === "production" ? null : err.stack,
   });

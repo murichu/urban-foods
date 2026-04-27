@@ -33,7 +33,7 @@
 
 .about-content h2 {
   font-size: 2rem;
-  color: #ff6b6b;
+  color: tomato;
   margin-bottom: 20px;
 }
 
@@ -57,7 +57,7 @@
 }
 
 .about-mission {
-  background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+  background: linear-gradient(135deg, tomato, tomato);
   color: white;
   padding: 50px;
   border-radius: 15px;

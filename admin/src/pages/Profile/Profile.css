@@ -1,0 +1,364 @@
+.profile-page {
+  padding: 2rem 3rem;
+  background-color: #f4f6f8;
+  min-height: 100vh;
+}
+
+
+
+.profile-header h1 {
+  font-size: 1.8rem;
+  color: #1e293b;
+}
+
+.profile-header p {
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.profile-content {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 2rem;
+}
+
+.profile-card {
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 28px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.03);
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+}
+
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.profile-avatar-large {
+  width: 100px;
+  height: 100px;
+  background: #fff1f0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.profile-avatar-section h2 {
+  font-size: 1.5rem;
+  color: #0f172a;
+}
+
+.role-badge {
+  background: #eff6ff;
+  color: #3b82f6;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 8px;
+  display: inline-block;
+}
+
+.profile-details {
+  text-align: left;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 24px 0;
+  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.detail-group p {
+  color: #1e293b;
+  font-weight: 500;
+  padding-left: 24px;
+}
+
+.logout-btn-large {
+  width: 100%;
+  padding: 14px;
+  background: #ff6347;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.logout-btn-large:hover {
+  background: #e5533d;
+  transform: translateY(-2px);
+}
+/* Profile Layout Refinement */
+.profile-grid {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.profile-card {
+  background: white;
+  border-radius: 32px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.03);
+  padding: 2.5rem;
+}
+
+/* Identity Card */
+.identity-card {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.avatar-large-wrapper {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.avatar-main {
+  width: 100px;
+  height: 100px;
+  background: #fff1f0;
+  color: #ff6347;
+  border-radius: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  box-shadow: 0 8px 25px rgba(255, 99, 71, 0.2);
+}
+
+.status-badge-online {
+  position: absolute;
+  bottom: -5px;
+  right: -5px;
+  background: #10b981;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 3px solid white;
+}
+
+.identity-card h2 {
+  font-size: 1.5rem;
+  margin: 0 0 0.25rem 0;
+  color: #1e293b;
+}
+
+.admin-role {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+.identity-stats {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.stat-pill {
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #64748b;
+  width: 100%;
+}
+
+.login-history-mini {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.login-history-mini label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #94a3b8;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.logout-btn-premium {
+  width: 100%;
+  background: #f1f5f9;
+  color: #64748b;
+  border: none;
+  padding: 1rem;
+  border-radius: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn-premium:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* Business Card Form */
+.card-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+}
+
+.card-title-icon {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.card-title-icon h3 {
+  font-size: 1.25rem;
+  color: #1e293b;
+  margin: 0;
+}
+
+.save-changes-btn {
+  background: #ff6347;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+  box-shadow: 0 8px 25px rgba(255, 99, 71, 0.3);
+  transition: all 0.2s;
+}
+
+.save-changes-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(255, 99, 71, 0.4);
+}
+
+.save-changes-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.business-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.form-group-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.form-group-premium.full-width {
+  grid-column: span 2;
+}
+
+.form-group-premium label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #f8fafc;
+  padding: 0.75rem 1.25rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s;
+}
+
+.input-wrapper:focus-within {
+  border-color: #ff6347;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(255, 99, 71, 0.1);
+}
+
+.input-wrapper svg {
+  color: #94a3b8;
+}
+
+.input-wrapper input, .input-wrapper textarea, .input-wrapper select {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.input-wrapper textarea {
+  resize: none;
+}
+
+.profile-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+@media (max-width: 1024px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,12 +1,21 @@
 import axios from 'axios';
+import orderModel from '../models/orderModel.js';
+import paymentModel from '../models/paymentModel.js';
+import logger from '../config/logger.js';
+import { generateCustomId } from '../utils/idGenerator.js';
+
+const getMpesaBaseUrl = () => {
+  return process.env.NODE_ENV === 'production'
+    ? 'https://api.safaricom.co.ke'
+    : 'https://sandbox.safaricom.co.ke';
+};
 
 /**
  * Generate M-Pesa access token
- * @returns {Promise<string>} Access token
  */
 export const getAccessToken = async () => {
-  const apiUrl =
-    'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials';
+  const baseUrl = getMpesaBaseUrl();
+  const apiUrl = `${baseUrl}/oauth/v1/generate?grant_type=client_credentials`;
   const headers = {
     Authorization:
       'Basic ' +
@@ -20,75 +29,53 @@ export const getAccessToken = async () => {
     const response = await axios.get(apiUrl, { headers });
     return response.data.access_token;
   } catch (error) {
-    console.error(
-      'Error getting access token:',
-      error.response ? error.response.data : error.message
-    );
+    logger.error('Error getting M-Pesa access token:', error.response?.data || error.message);
     throw new Error('Error getting access token');
   }
 };
 
 /**
  * Generate timestamp for M-Pesa requests
- * @returns {string} Timestamp in YYYYMMDDHHmmss format
  */
 export const generateTimestamp = () => {
   const date = new Date();
-  return (
-    date.getFullYear() +
-    ('0' + (date.getMonth() + 1)).slice(-2) +
-    ('0' + date.getDate()).slice(-2) +
-    ('0' + date.getHours()).slice(-2) +
-    ('0' + date.getMinutes()).slice(-2) +
-    ('0' + date.getSeconds()).slice(-2)
-  );
-};
-
-/**
- * Generate password for M-Pesa STK Push
- * @param {string} shortCode - Business short code
- * @param {string} passkey - M-Pesa passkey
- * @param {string} timestamp - Timestamp string
- * @returns {string} Base64 encoded password
- */
-export const generatePassword = (shortCode, passkey, timestamp) => {
-  return Buffer.from(shortCode + passkey + timestamp).toString('base64');
+  const pad = (n) => n.toString().padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 };
 
 /**
  * Initiate M-Pesa STK Push
- * @param {number} amount - Amount to charge
- * @param {string} phoneNumber - Phone number to charge
- * @param {string} orderId - Order reference
- * @returns {Promise<object>} M-Pesa response
  */
-export const initiateMpesaStkPush = async (amount, phoneNumber, orderId) => {
+export const initiateMpesaStkPush = async (amount, phoneNumber, orderDatabaseId, orderId) => {
   const accessToken = await getAccessToken();
-  
+
   const shortCode = process.env.MPESA_SHORTCODE || '174379';
   const passkey = process.env.MPESA_PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
   const timestamp = generateTimestamp();
-  const password = generatePassword(shortCode, passkey, timestamp);
-  
-  const frontend_url = process.env.MPESA_CALLBACK_URL || 'http://localhost:5173';
+  const password = Buffer.from(shortCode + passkey + timestamp).toString('base64');
+
+  // Use a dedicated backend callback URL
+  // If not provided in env, we might need a way to detect it or use a default
+  const callbackUrl = process.env.MPESA_BACKEND_CALLBACK_URL || process.env.MPESA_CALLBACK_URL || `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/mpesa/callback`;
 
   const mpesaPayload = {
     BusinessShortCode: shortCode,
     Password: password,
     Timestamp: timestamp,
     TransactionType: 'CustomerPayBillOnline',
-    Amount: amount,
-    PartyA: phoneNumber,
+    Amount: Math.round(amount),
+    PartyA: phoneNumber.replace('+', ''),
     PartyB: shortCode,
-    PhoneNumber: phoneNumber,
-    CallBackURL: `${frontend_url}/mpesa/callback`,
-    AccountReference: `Order_${orderId}`,
-    TransactionDesc: 'Payment for Order',
+    PhoneNumber: phoneNumber.replace('+', ''),
+    CallBackURL: callbackUrl,
+    AccountReference: orderId,
+    TransactionDesc: `Payment for Urban Foods Order ${orderId}`,
   };
 
   try {
+    const baseUrl = getMpesaBaseUrl();
     const response = await axios.post(
-      'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
+      `${baseUrl}/mpesa/stkpush/v1/processrequest`,
       mpesaPayload,
       {
         headers: {
@@ -97,40 +84,116 @@ export const initiateMpesaStkPush = async (amount, phoneNumber, orderId) => {
         },
       }
     );
+
+    // If successful, we should store the CheckoutRequestID in the order or a payment record
+    if (response.data.ResponseCode === '0') {
+      await orderModel.findByIdAndUpdate(orderDatabaseId, {
+        $set: {
+          paymentId: generateCustomId('STK'), // New Payment ID for this initiation
+          mpesaCheckoutRequestId: response.data.CheckoutRequestID
+        }
+      });
+    }
+
     return response.data;
   } catch (error) {
-    console.error(
-      'Error initiating STK Push:',
-      error.response ? error.response.data : error.message
-    );
-    throw new Error('Error initiating STK Push');
+    logger.error('Error initiating M-Pesa STK Push:', error.response?.data || error.message);
+    throw error;
+  }
+};
+
+/**
+ * Handle M-Pesa callback logic
+ */
+export const processMpesaCallback = async (stkCallback) => {
+  const {
+    ResultCode,
+    ResultDesc,
+    MerchantRequestID,
+    CheckoutRequestID,
+    CallbackMetadata,
+  } = stkCallback;
+
+  // Find order by mpesaCheckoutRequestId
+  const order = await orderModel.findOne({ mpesaCheckoutRequestId: CheckoutRequestID });
+
+  if (!order) {
+    logger.error(`CRITICAL: Order not found for M-Pesa CheckoutRequestID: ${CheckoutRequestID}`);
+    throw new Error('Order not found');
+  }
+
+  if (ResultCode === 0) {
+    order.paymentStatus = 'Paid';
+    order.payment = true;
+    await order.save();
+
+    const items = CallbackMetadata?.Item || [];
+    const transactionId = items.find(i => i.Name === 'MpesaReceiptNumber')?.Value;
+    const amount = items.find(i => i.Name === 'Amount')?.Value;
+    const phoneNumber = items.find(i => i.Name === 'PhoneNumber')?.Value;
+
+    const payment = new paymentModel({
+      userId: order.userId,
+      orderId: order._id,
+      paymentId: order.paymentId,
+      method: 'mpesa_stk',
+      amount: amount || order.amount,
+      status: 'completed',
+      transactionId,
+      phoneNumber,
+      MerchantRequestID,
+      CheckoutRequestID,
+      ResultCode,
+      ResultDesc,
+    });
+
+    await payment.save();
+    logger.info(`Payment SUCCESS for Order: ${order.orderId} (ID: ${order._id})`);
+    return { success: true, order };
+  } else {
+    order.paymentStatus = 'Failed';
+    await order.save();
+    logger.warn(`Payment FAILED for Order: ${order.orderId} (ID: ${order._id}): ${ResultDesc}`);
+
+    // Log failed payment attempt
+    const payment = new paymentModel({
+      userId: order.userId,
+      orderId: order._id,
+      paymentId: order.paymentId,
+      method: 'mpesa_stk',
+      amount: order.amount,
+      status: 'failed',
+      MerchantRequestID,
+      CheckoutRequestID,
+      ResultCode,
+      ResultDesc,
+    });
+    await payment.save();
+
+    return { success: false, order, message: ResultDesc };
   }
 };
 
 /**
  * Query M-Pesa STK Push status
- * @param {string} checkoutRequestID - Checkout request ID
- * @returns {Promise<object>} Query response
  */
 export const queryStkPushStatus = async (checkoutRequestID) => {
   const accessToken = await getAccessToken();
-  
   const shortCode = process.env.MPESA_SHORTCODE || '174379';
   const passkey = process.env.MPESA_PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
   const timestamp = generateTimestamp();
-  const password = generatePassword(shortCode, passkey, timestamp);
-
-  const queryData = {
-    BusinessShortCode: shortCode,
-    Password: password,
-    Timestamp: timestamp,
-    CheckoutRequestID: checkoutRequestID,
-  };
+  const password = Buffer.from(shortCode + passkey + timestamp).toString('base64');
 
   try {
+    const baseUrl = getMpesaBaseUrl();
     const response = await axios.post(
-      'https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query',
-      queryData,
+      `${baseUrl}/mpesa/stkpushquery/v1/query`,
+      {
+        BusinessShortCode: shortCode,
+        Password: password,
+        Timestamp: timestamp,
+        CheckoutRequestID: checkoutRequestID,
+      },
       {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -140,49 +203,7 @@ export const queryStkPushStatus = async (checkoutRequestID) => {
     );
     return response.data;
   } catch (error) {
-    console.error(
-      'Error querying STK Push status:',
-      error.response ? error.response.data : error.message
-    );
-    throw new Error('Error querying STK Push status');
-  }
-};
-
-/**
- * Initiate M-Pesa C2B (Customer to Business) payment
- * @param {number} amount - Amount to charge
- * @param {string} phoneNumber - Phone number
- * @param {string} orderId - Order reference
- * @returns {Promise<object>} M-Pesa response
- */
-export const initiateMpesaC2B = async (amount, phoneNumber, orderId) => {
-  const accessToken = await getAccessToken();
-
-  const c2bPayload = {
-    ShortCode: process.env.MPESA_SHORTCODE || '174379',
-    CommandID: 'CustomerPayBillOnline',
-    Amount: amount,
-    MSISDN: phoneNumber,
-    BillRefNumber: `Order_${orderId}`,
-  };
-
-  try {
-    const response = await axios.post(
-      'https://sandbox.safaricom.co.ke/mpesa/c2b/v1/simulate',
-      c2bPayload,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error(
-      'Error initiating C2B payment:',
-      error.response ? error.response.data : error.message
-    );
-    throw new Error('Error initiating C2B payment');
+    logger.error('Error querying STK status:', error.response?.data || error.message);
+    throw error;
   }
 };

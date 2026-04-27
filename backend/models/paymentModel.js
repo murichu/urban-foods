@@ -12,6 +12,10 @@ const paymentSchema = new mongoose.Schema({
     ref: "Order",
     required: true,
   },
+  paymentId: {
+    type: String,
+    unique: true,
+  },
   method: {
     type: String,
     enum: ["mpesa_stk", "mpesa_c2b"],

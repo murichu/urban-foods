@@ -1,0 +1,135 @@
+.notifications-page {
+  padding: 3rem 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+}
+
+.notifications-header h1 {
+  font-size: 2rem;
+  color: #0f172a;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.notifications-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.notification-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  transition: all 0.2s;
+}
+
+.notification-card.unread {
+  border-left: 4px solid #ff6347;
+  background: #fffcfb;
+}
+
+.notification-card.read {
+  opacity: 0.8;
+}
+
+.notification-content {
+  display: flex;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.notification-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notification-icon-box.success { background: #ecfdf5; }
+.notification-icon-box.info { background: #eff6ff; }
+.notification-icon-box.warning { background: #fffbeb; }
+
+.notification-text h3 {
+  font-size: 1.1rem;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+}
+
+.notification-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.notification-text p {
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+.notification-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.notification-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.delete-btn {
+  color: #ef4444 !important;
+  border-color: #fee2e2 !important;
+}
+
+.delete-btn:hover {
+  background: #fee2e2 !important;
+}
+
+.empty-notifications {
+  padding: 5rem 2rem;
+}
+
+.new-badge {
+  font-size: 0.65rem !important;
+}
+
+.text-green { color: #10b981; }
+.text-blue { color: #3b82f6; }
+.text-yellow { color: #f59e0b; }
+
+@media (max-width: 640px) {
+  .notifications-header {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .notification-card {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  
+  .notification-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

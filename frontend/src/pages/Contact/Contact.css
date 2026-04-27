@@ -36,7 +36,7 @@
   margin-bottom: 15px;
 }
 
-.contact-info > p {
+.contact-info>p {
   color: #666;
   margin-bottom: 30px;
   line-height: 1.6;
@@ -84,7 +84,7 @@
   width: 45px;
   height: 45px;
   border-radius: 50%;
-  background-color: #f5f5f5;
+  background-color: #ff6b6b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,7 +92,7 @@
 }
 
 .social-icons a:hover {
-  background-color: #ff6b6b;
+  background-color: #252525;
   transform: translateY(-3px);
 }
 
@@ -247,7 +247,7 @@
     font-size: 1.5rem;
   }
 
-  .contact-info > p {
+  .contact-info>p {
     font-size: 0.95rem;
     margin-bottom: 20px;
   }

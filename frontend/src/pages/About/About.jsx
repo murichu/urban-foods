@@ -2,6 +2,7 @@
 import React from "react";
 import "./About.css";
 import { assets } from "../../assets/assets";
+import { Truck, Star, Headphones, Search } from "lucide-react";
 
 const About = () => {
   return (
@@ -36,22 +37,22 @@ const About = () => {
           <h2>Why Choose Us?</h2>
           <div className="features-grid">
             <div className="feature-card">
-              <img src={assets.basket_icon} alt="Fast Delivery" />
+              <Truck size={40} color="var(--primary)" />
               <h3>Fast Delivery</h3>
               <p>Get your food delivered in record time with our efficient delivery network.</p>
             </div>
             <div className="feature-card">
-              <img src={assets.rating_starts} alt="Quality Food" />
+              <Star size={40} color="var(--primary)" fill="var(--primary)" />
               <h3>Quality Food</h3>
               <p>We partner with only the best restaurants to ensure premium quality meals.</p>
             </div>
             <div className="feature-card">
-              <img src={assets.profile_icon} alt="Customer Care" />
+              <Headphones size={40} color="var(--primary)" />
               <h3>Customer Care</h3>
               <p>Our dedicated support team is always ready to assist you 24/7.</p>
             </div>
             <div className="feature-card">
-              <img src={assets.search_icon} alt="Wide Selection" />
+              <Search size={40} color="var(--primary)" />
               <h3>Wide Selection</h3>
               <p>Choose from hundreds of restaurants and thousands of menu items.</p>
             </div>

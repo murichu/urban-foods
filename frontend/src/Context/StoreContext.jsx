@@ -6,6 +6,7 @@ export const StoreContext = createContext(null);
 const StoreContextProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState({});
   const [foodList, setFoodList] = useState([]);
+  const [favorites, setFavorites] = useState([]);
   const [token, setToken] = useState("");
 
   const url = import.meta.env.VITE_API_BASE_URL;
@@ -86,6 +87,39 @@ const StoreContextProvider = ({ children }) => {
     }
   };
 
+  // Favorites logic
+  const fetchFavorites = async (authToken) => {
+    try {
+      const response = await api.get("/api/favorite/list", {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (response.data.success) {
+        setFavorites(response.data.data.map(item => item._id));
+      }
+    } catch (error) {
+      console.error("Failed to fetch favorites:", error);
+    }
+  };
+
+  const toggleFavorite = async (foodId) => {
+    if (!token) {
+      alert("Please login to add favorites");
+      return;
+    }
+    try {
+      const response = await api.post(
+        "/api/favorite/toggle",
+        { foodId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (response.data.success) {
+        setFavorites(response.data.favorites);
+      }
+    } catch (error) {
+      console.error("Failed to toggle favorite:", error);
+    }
+  };
+
   // Load cart data
   const loadCartData = async (authToken) => {
     try {
@@ -113,6 +147,7 @@ const StoreContextProvider = ({ children }) => {
       if (savedToken) {
         setToken(savedToken);
         await loadCartData(savedToken);
+        await fetchFavorites(savedToken);
       }
     };
 
@@ -122,6 +157,8 @@ const StoreContextProvider = ({ children }) => {
   const value = {
     foodList,
     cartItems,
+    favorites,
+    toggleFavorite,
     addToCart,
     removeFromCart,
     getTotalCartAmount,

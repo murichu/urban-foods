@@ -1,6 +1,7 @@
 import foodModel from '../models/foodModel.js';
 import fs from 'fs';
 import path from 'path';
+import { generateCustomId } from '../utils/idGenerator.js';
 
 // Allowed file types for upload
 const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
@@ -57,7 +58,7 @@ const addFood = async (req, res) => {
     const validation = validateFile(req.file);
     if (!validation.valid) {
       // Delete the invalid file
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, () => { });
       return res.status(400).json({
         success: false,
         message: validation.message
@@ -68,7 +69,7 @@ const addFood = async (req, res) => {
     const { name, description, price, category } = req.body;
 
     if (!name || !description || !price || !category) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, () => { });
       return res.status(400).json({
         success: false,
         message: 'All fields (name, description, price, category) are required'
@@ -78,7 +79,7 @@ const addFood = async (req, res) => {
     // Validate price
     const priceNum = parseFloat(price);
     if (isNaN(priceNum) || priceNum <= 0) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, () => { });
       return res.status(400).json({
         success: false,
         message: 'Price must be a positive number'
@@ -88,6 +89,7 @@ const addFood = async (req, res) => {
     const image_filename = sanitizeFilename(`${req.file.filename}`);
 
     const food = new foodModel({
+      enterpriseId: generateCustomId('FID'),
       name: name.trim(),
       description: description.trim(),
       price: priceNum,
@@ -106,7 +108,7 @@ const addFood = async (req, res) => {
 
     // Clean up file if save fails
     if (req.file && req.file.path) {
-      fs.unlink(req.file.path, () => {});
+      fs.unlink(req.file.path, () => { });
     }
 
     res.status(500).json({
@@ -182,4 +184,58 @@ const removeFood = async (req, res) => {
   }
 };
 
-export { addFood, listFood, removeFood };
+/**
+ * Update food item (name, description, price, category, optionally new image)
+ */
+const updateFood = async (req, res) => {
+  try {
+    if (!req.params.id || !req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      if (req.file) fs.unlink(req.file.path, () => { });
+      return res.status(400).json({ success: false, message: 'Invalid food ID format' });
+    }
+
+    const food = await foodModel.findById(req.params.id);
+    if (!food) {
+      if (req.file) fs.unlink(req.file.path, () => { });
+      return res.status(404).json({ success: false, message: 'Food item not found' });
+    }
+
+    const { name, description, price, category } = req.body;
+    const priceNum = parseFloat(price);
+
+    if (price !== undefined && (isNaN(priceNum) || priceNum <= 0)) {
+      if (req.file) fs.unlink(req.file.path, () => { });
+      return res.status(400).json({ success: false, message: 'Price must be a positive number' });
+    }
+
+    // If a new image was uploaded, validate and replace the old one
+    if (req.file) {
+      const validation = validateFile(req.file);
+      if (!validation.valid) {
+        fs.unlink(req.file.path, () => { });
+        return res.status(400).json({ success: false, message: validation.message });
+      }
+      // Delete old image
+      const oldImagePath = path.join(UPLOADS_DIR, path.basename(food.image));
+      fs.unlink(oldImagePath, (err) => {
+        if (err && err.code !== 'ENOENT') console.error('Error deleting old image:', err.message);
+      });
+      food.image = sanitizeFilename(req.file.filename);
+    }
+
+    if (name) food.name = name.trim();
+    if (description) food.description = description.trim();
+    if (price !== undefined) food.price = priceNum;
+    if (category) food.category = category.trim();
+    food.updatedAt = new Date();
+
+    await food.save();
+    res.status(200).json({ success: true, message: 'Food Updated Successfully', data: food });
+  } catch (error) {
+    console.error('Update food error:', error.message);
+    if (req.file && req.file.path) fs.unlink(req.file.path, () => { });
+    res.status(500).json({ success: false, message: 'Error While Updating Food' });
+  }
+};
+
+export { addFood, listFood, removeFood, updateFood };

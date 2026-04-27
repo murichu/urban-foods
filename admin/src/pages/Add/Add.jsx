@@ -1,13 +1,78 @@
-/* eslint-disable react/prop-types */
-/* eslint-disable no-unused-vars */
 import React, { useState } from "react";
-import "./Add.css";
-import { assets } from "../../assets/assets";
 import axios from "axios";
-import { toast } from "react-toastify";
+import toast from "react-hot-toast";
+import {
+  UploadCloud,
+  Package,
+  Tag,
+  FileText,
+  DollarSign,
+  Trash2,
+  ArrowRight,
+  ShoppingBag
+} from "lucide-react";
+export const Card = ({ children, className = '', padding = true, glass = false, hover = false }) => (
+  <div className={`admin-ui-card ${padding ? 'p-6' : ''} ${glass ? 'glass' : ''} ${hover ? 'hover-effect' : ''} ${className}`}>
+    {children}
+  </div>
+);
+
+export const Button = ({ 
+  children, 
+  variant = 'primary', 
+  size = 'md', 
+  className = '', 
+  onClick, 
+  disabled = false,
+  type = 'button',
+  icon: Icon
+}) => (
+  <button 
+    type={type}
+    className={`admin-ui-btn btn-${variant} btn-${size} ${className}`} 
+    onClick={onClick}
+    disabled={disabled}
+  >
+    {Icon && <Icon size={size === 'sm' ? 16 : 18} className="btn-icon" />}
+    {children}
+  </button>
+);
+
+export const Input = ({ 
+  label, 
+  type = 'text', 
+  placeholder, 
+  value, 
+  onChange, 
+  name, 
+  required = false, 
+  className = '',
+  icon: Icon
+}) => (
+  <div className={`admin-ui-input-group ${className}`}>
+    {label && <label className="admin-ui-label">{label}</label>}
+    <div className="input-wrapper">
+      {Icon && <Icon size={18} className="input-icon" />}
+      <input 
+        type={type} 
+        name={name}
+        placeholder={placeholder} 
+        value={value} 
+        onChange={onChange} 
+        required={required}
+        className={Icon ? 'with-icon' : ''}
+      />
+    </div>
+  </div>
+);
+import { useAdminAuth } from "../../context/AdminAuthContext";
+import "./Add.css";
 
 const Add = ({ url }) => {
-  const [image, setImage] = useState(false);
+  const { adminToken } = useAdminAuth();
+  const [image, setImage] = useState(null);
+  const [loading, setLoading] = useState(false);
+
   const [data, setData] = useState({
     name: "",
     description: "",
@@ -15,15 +80,22 @@ const Add = ({ url }) => {
     category: "Salad",
   });
 
-  const onChangeHandler = (event) => {
-    const name = event.target.name;
-    const value = event.target.value;
-    setData((prevData) => ({ ...prevData, [name]: value }));
-    setData((data) => ({ ...data, [name]: value }));
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const onSubmitHandler = async (event) => {
-    event.preventDefault();
+  const handleImage = (file) => {
+    if (!file) return;
+    setImage(file);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!image) return toast.error("Please upload an image");
+
+    setLoading(true);
+
     const formData = new FormData();
     formData.append("name", data.name);
     formData.append("description", data.description);
@@ -32,100 +104,175 @@ const Add = ({ url }) => {
     formData.append("image", image);
 
     try {
-      const response = await axios.post(`${url}/api/foods/add`, formData);
-      if (response.data.success) {
+      const res = await axios.post(`${url}/api/foods/add`, formData, {
+        headers: { token: adminToken }
+      });
+
+      if (res.data.success) {
+        toast.success("Product added successfully 🚀");
         setData({
           name: "",
           description: "",
           price: "",
           category: "Salad",
         });
-        setImage(false);
-        toast.success(response.data.message);
+        setImage(null);
       } else {
-        toast.error(response.data.message);
+        toast.error(res.data.message);
       }
-    } catch (error) {
-      toast.error("An error occurred. Please try again.");
+    } catch (err) {
+      toast.error("Upload failed");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="add">
-      <form className="flex-col" onSubmit={onSubmitHandler}>
-        <div className="add-img-upload flex-col">
-          <p>Upload Image</p>
-          <label htmlFor="image">
-            <img
-              src={image ? URL.createObjectURL(image) : assets.upload_area}
-              alt=""
-            />
-          </label>
-          <input
-            onChange={(e) => setImage(e.target.files[0])}
-            type="file"
-            id="image"
-            hidden
-            required
-          />
-        </div>
-        <div className="add-product-name flex-col">
-          <p>Product Name</p>
-          <input
-            onChange={onChangeHandler}
-            value={data.name}
-            type="text"
-            name="name"
-            placeholder="Type here"
-            required
-          />
-        </div>
-        <div className="add-product-description flex-col">
-          <p>Product Description</p>
-          <textarea
-            onChange={onChangeHandler}
-            value={data.description}
-            name="description"
-            rows="6"
-            placeholder="Write content here"
-            required
-          ></textarea>
-        </div>
-        <div className="add-category-price">
-          <div className="add-category flex-col">
-            <p>Product category</p>
-            <select
-              onChange={onChangeHandler}
-              name="category"
-              value={data.category}
-            >
-              <option value="Salad">Salad</option>
-              <option value="Rolls">Rolls</option>
-              <option value="Deserts">Deserts</option>
-              <option value="Sandwich">Sandwich</option>
-              <option value="Cake">Cake</option>
-              <option value="Pure Veg">Pure Veg</option>
-              <option value="Pasta">Pasta</option>
-              <option value="Noodles">Noodles</option>
-            </select>
+    <div className="add-page">
+      {/* HEADER */}
+      <header className="premium-page-header">
+        <div className="header-info-flex">
+          <div className="header-icon-container">
+            <Package size={28} />
           </div>
-          <div className="add-price flex-col">
-            <p>Product price</p>
+          <div className="header-titles">
+            <h1>Add New Product</h1>
+            <p>Create and publish a new menu item</p>
+          </div>
+        </div>
+      </header>
+
+      {/* FORM */}
+      <Card className="add-card">
+        <form className="add-form" onSubmit={handleSubmit}>
+
+          {/* IMAGE SECTION */}
+          <div className="image-section">
+            <span className="section-title">Product Image</span>
+
+            <label
+              htmlFor="imageUpload"
+              className={`upload-box ${image ? "has-image" : ""}`}
+            >
+              {image ? (
+                <div className="preview">
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt="preview"
+                  />
+                  <div className="overlay">
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setImage(null);
+                      }}
+                      icon={Trash2}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="upload-placeholder">
+                  <UploadCloud size={32} />
+                  <p>Click or drag image</p>
+                  <span>PNG, JPG, WEBP</span>
+                </div>
+              )}
+            </label>
+
             <input
-              onChange={onChangeHandler}
-              value={data.price}
-              type="number"
-              name="price"
-              placeholder="Ksh20"
+              id="imageUpload"
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => handleImage(e.target.files[0])}
+            />
+          </div>
+
+          {/* FORM SECTION */}
+          <div className="form-section">
+            <span className="section-title">Product Details</span>
+
+            <Input
+              label="Product Name"
+              name="name"
+              value={data.name}
+              onChange={handleChange}
+              placeholder="e.g. Truffle Pasta"
+              icon={Package}
               required
             />
+
+            <div className="row">
+              <div className="field">
+                <label><Tag size={14} /> Category</label>
+                <select
+                  name="category"
+                  value={data.category}
+                  onChange={handleChange}
+                >
+                  <option>Salad</option>
+                  <option>Rolls</option>
+                  <option>Desserts</option>
+                  <option>Sandwich</option>
+                  <option>Cake</option>
+                  <option>Pure Veg</option>
+                  <option>Pasta</option>
+                  <option>Noodles</option>
+                </select>
+              </div>
+
+              <Input
+                label="Price (KSh)"
+                name="price"
+                type="number"
+                value={data.price}
+                onChange={handleChange}
+                icon={DollarSign}
+                required
+              />
+            </div>
+
+            <div className="field">
+              <label><FileText size={14} /> Description</label>
+              <textarea
+                name="description"
+                value={data.description}
+                onChange={handleChange}
+                rows="5"
+                placeholder="Describe taste, ingredients, and appeal..."
+                required
+              />
+            </div>
+
+            <div className="actions">
+              <Button
+                type="submit"
+                size="lg"
+                disabled={loading}
+                className="submit-btn"
+              >
+                {loading ? "Publishing..." : "Publish Product"}
+                {!loading && <ArrowRight size={18} />}
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Card>
+
+      {/* TIP */}
+      <Card className="tip-card">
+        <div className="tip">
+          <ShoppingBag size={20} />
+          <div>
+            <h4>Pro Tip</h4>
+            <p>Use clean, high-quality images for better conversions.</p>
           </div>
         </div>
-        <button type="submit" className="add-button">
-          ADD
-        </button>
-      </form>
-      <br />
+      </Card>
     </div>
   );
 };
