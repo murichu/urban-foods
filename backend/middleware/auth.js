@@ -7,8 +7,19 @@ const authMiddleware = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "Not Authorized. Please login again." });
   }
   
+  // Validate token format
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    return res.status(401).json({ success: false, message: "Invalid token format" });
+  }
+  
   try {
-    const token_decode = jwt.verify(token, process.env.JWT_SECRET);
+    const token_decode = jwt.verify(token.trim(), process.env.JWT_SECRET);
+    
+    // Validate token payload
+    if (!token_decode.id || typeof token_decode.id !== 'string') {
+      return res.status(401).json({ success: false, message: "Invalid token payload" });
+    }
+    
     req.body.userId = token_decode.id;
     next();
   } catch (error) {
@@ -20,6 +31,10 @@ const authMiddleware = async (req, res, next) => {
     
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ success: false, message: "Invalid token. Please login again." });
+    }
+    
+    if (error.name === 'NotBeforeError') {
+      return res.status(401).json({ success: false, message: "Token not yet valid. Please login again." });
     }
     
     return res.status(500).json({ success: false, message: "Authentication error" });

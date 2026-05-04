@@ -88,6 +88,7 @@ const handleCallback = async (req, res) => {
   try {
     const { Body } = req.body;
     
+    // Validate callback structure
     if (!Body || !Body.stkCallback) {
       return res.status(400).json({ 
         success: false, 
@@ -105,6 +106,14 @@ const handleCallback = async (req, res) => {
       CallbackMetadata,
     } = stkCallback;
 
+    // Validate required fields
+    if (!CheckoutRequestID) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Missing CheckoutRequestID' 
+      });
+    }
+
     if (ResponseCode === '0' || ResultCode === '0') {
       const order = await orderModel.findOne({ _id: CheckoutRequestID });
       
@@ -115,11 +124,28 @@ const handleCallback = async (req, res) => {
         });
       }
       
+      // Prevent duplicate processing
+      if (order.paymentStatus === 'Success' || order.paymentStatus === 'Paid') {
+        return res.status(200).json({ 
+          success: true, 
+          message: 'Payment already processed' 
+        });
+      }
+      
       order.paymentStatus = 'Success';
       await order.save();
 
-      // Extract metadata safely
+      // Extract metadata safely with validation
       const metadata = CallbackMetadata?.Item || [];
+      
+      if (!metadata || metadata.length < 5) {
+        console.error('Invalid callback metadata');
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid payment metadata' 
+        });
+      }
+      
       const transactionData = {
         MerchantRequestID,
         CheckoutRequestID,
@@ -131,6 +157,14 @@ const handleCallback = async (req, res) => {
         TransactionDate: metadata[3]?.Value,
         PhoneNumber: metadata[4]?.Value,
       };
+
+      // Validate transaction data
+      if (!transactionData.MpesaReceiptNumber) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing M-Pesa receipt number' 
+        });
+      }
 
       // Save transaction to payment model
       const payment = new paymentModel({

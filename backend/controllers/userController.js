@@ -10,7 +10,9 @@ import validator from 'validator';
  */
 const createToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    algorithm: 'HS256', // Explicitly specify algorithm
+    notBefore: '0s' // Token is valid immediately
   });
 };
 
@@ -101,17 +103,26 @@ const registerUser = async (req, res) => {
     }
 
     // Validate strong password (minimum 8 characters, at least one number and one letter)
-    if (password.length < 8) {
+    if (password.length < 10) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Password must be at least 8 characters long' 
+        message: 'Password must be at least 10 characters long' 
       });
     }
     
-    if (!/(?=.*[a-zA-Z])(?=.*\d)/.test(password)) {
+    // Check for common passwords
+    const commonPasswords = ['password', '1234567890', 'qwertyuiop', 'letmein123', 'welcome123'];
+    if (commonPasswords.some(common => password.toLowerCase().includes(common))) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Password must contain at least one letter and one number' 
+        message: 'Password is too common. Please choose a stronger password' 
+      });
+    }
+    
+    if (!/(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(password)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password must contain at least one letter, one number, and one special character' 
       });
     }
 

@@ -14,6 +14,7 @@ const validateFile = (file) => {
     return { valid: false, message: 'No file uploaded' };
   }
   
+  // Check MIME type more strictly
   if (!ALLOWED_FILE_TYPES.includes(file.mimetype)) {
     return { 
       valid: false, 
@@ -21,10 +22,30 @@ const validateFile = (file) => {
     };
   }
   
+  // Additional check: verify file extension matches MIME type
+  const ext = file.originalname.split('.').pop().toLowerCase();
+  const validExtensions = ['jpeg', 'jpg', 'png', 'webp'];
+  if (!validExtensions.includes(ext)) {
+    fs.unlink(file.path, () => {});
+    return { 
+      valid: false, 
+      message: 'File extension does not match content type' 
+    };
+  }
+  
   if (file.size > MAX_FILE_SIZE) {
     return { 
       valid: false, 
       message: 'File too large. Maximum size is 5MB' 
+    };
+  }
+  
+  // Check for empty files
+  if (file.size === 0) {
+    fs.unlink(file.path, () => {});
+    return { 
+      valid: false, 
+      message: 'Empty file uploaded' 
     };
   }
   
