@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+ 
 import React, { useContext, useNavigate, useEffect } from "react";
 import "./Verify.css";
 import { useSearchParams } from "react-router-dom";
@@ -28,7 +28,7 @@ const Verify = () => {
 
   useEffect(() => {
     verifyPayment();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, []);
 
   console.log(success, orderId);

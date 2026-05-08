@@ -1,53 +1,68 @@
-import pino from 'pino';
+import winston from 'winston';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure logs directory exists
 const logDir = path.join(process.cwd(), 'logs');
+
 if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+  fs.mkdirSync(logDir, { recursive: true });
 }
 
-const isDevelopment = process.env.NODE_ENV === 'development';
+const { combine, timestamp, errors, splat, json, colorize, printf } = winston.format;
 
-const transport = pino.transport({
-  targets: [
-    // 1. Log errors to error.log
-    {
-      target: 'pino/file',
-      level: 'error',
-      options: { 
-        destination: path.join(logDir, 'error.log'),
-        mkdir: true 
-      }
-    },
-    // 2. Log everything to combined.log
-    {
-      target: 'pino/file',
-      level: 'info',
-      options: { 
-        destination: path.join(logDir, 'combined.log'),
-        mkdir: true 
-      }
-    },
-    // 3. Pretty print to console in development
-    {
-      target: 'pino-pretty',
-      level: 'info',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-      }
-    }
-  ]
+const consoleFormat = printf(({ level, message, timestamp, stack, ...metadata }) => {
+  const meta = Object.keys(metadata).length ? ` ${JSON.stringify(metadata)}` : '';
+  return `${timestamp} ${level}: ${stack || message}${meta}`;
 });
 
-const logger = pino(
-  {
-    level: process.env.LOG_LEVEL || 'info',
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: combine(
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    errors({ stack: true }),
+    splat(),
+    json()
+  ),
+  defaultMeta: { service: 'urban-foods-backend' },
+  transports: [
+    new winston.transports.File({
+      filename: path.join(logDir, 'error.log'),
+      level: 'error',
+    }),
+    new winston.transports.File({
+      filename: path.join(logDir, 'combined.log'),
+    }),
+  ],
+  exceptionHandlers: [
+    new winston.transports.File({
+      filename: path.join(logDir, 'exceptions.log'),
+    }),
+  ],
+  rejectionHandlers: [
+    new winston.transports.File({
+      filename: path.join(logDir, 'rejections.log'),
+    }),
+  ],
+});
+
+if (process.env.NODE_ENV !== 'production') {
+  logger.add(
+    new winston.transports.Console({
+      format: combine(
+        colorize(),
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        errors({ stack: true }),
+        splat(),
+        consoleFormat
+      ),
+    })
+  );
+}
+
+logger.stream = {
+  write: (message) => {
+    logger.http(message.trim());
   },
-  transport
-);
+};
 
 export default logger;

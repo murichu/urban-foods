@@ -1,134 +1,283 @@
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import mongoSanitize from 'express-mongo-sanitize';
-import xss from 'xss-clean';
-import hpp from 'hpp';
-import cookieParser from 'cookie-parser';
-import { connectDB } from './config/db.js';
-import foodRouter from './routes/foodRoute.js';
-import userRouter from './routes/userRoute.js';
-import cartRouter from './routes/cartRoute.js';
-import orderRouter from './routes/orderRoute.js';
-import favoriteRouter from './routes/favoriteRoute.js';
-import reviewRouter from './routes/reviewRoute.js';
-import errorHandler from './middleware/errorHandler.js';
-import bodyParser from 'body-parser';
-import dotenv from 'dotenv';
-import logger from './config/logger.js';
-import morgan from 'morgan';
-import mpesaRouter from './routes/mpesaRoute.js';
-import auditLogRouter from './routes/auditLogRoute.js';
-import settingsRouter from './routes/settingsRoute.js';
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import hpp from "hpp";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import morgan from "morgan";
 
+import { connectDB } from "./config/db.js";
+import logger from "./config/logger.js";
 
-import fs from 'fs';
-import path from 'path';
+// Routes
+import foodRouter from "./routes/foodRoute.js";
+import userRouter from "./routes/userRoute.js";
+import cartRouter from "./routes/cartRoute.js";
+import orderRouter from "./routes/orderRoute.js";
+import favoriteRouter from "./routes/favoriteRoute.js";
+import reviewRouter from "./routes/reviewRoute.js";
+import mpesaRouter from "./routes/mpesaRoute.js";
+import auditLogRouter from "./routes/auditLogRoute.js";
+import settingsRouter from "./routes/settingsRoute.js";
 
-// Load environment variables
+// Middleware
+import errorHandler from "./middleware/errorHandler.js";
+
+// ─────────────────────────────────────────────────────────────
+// Environment Configuration
+// ─────────────────────────────────────────────────────────────
 dotenv.config();
 
-// App config
+// ─────────────────────────────────────────────────────────────
+// App Initialization
+// ─────────────────────────────────────────────────────────────
 const app = express();
 const port = process.env.PORT || 4000;
 
-// DB connection
+// Hide Express fingerprint
+app.disable("x-powered-by");
+
+// Trust proxy (Render, Railway, Vercel, etc.)
+app.set("trust proxy", 1);
+
+// ─────────────────────────────────────────────────────────────
+// Database Connection
+// ─────────────────────────────────────────────────────────────
 connectDB();
 
-// Ensure logs directory exists for Morgan
-const logDir = path.join(process.cwd(), 'logs');
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
-}
+// ─────────────────────────────────────────────────────────────
+// HTTP Logger
+// ─────────────────────────────────────────────────────────────
+app.use(
+  morgan(process.env.NODE_ENV === "production" ? "combined" : "dev", {
+    stream: logger.stream,
+  })
+);
 
-// Access log stream for Morgan
-const accessLogStream = fs.createWriteStream(path.join(logDir, 'access.log'), { flags: 'a' });
+// ─────────────────────────────────────────────────────────────
+// CORS Configuration
+// ─────────────────────────────────────────────────────────────
+const parseOrigins = (value) =>
+  value
+    ? value
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean)
+    : [];
 
-// HTTP Request logging (Morgan)
-app.use(morgan('dev')); // Console
-app.use(morgan('combined', { stream: accessLogStream })); // File
-
-
-// 1. CORS Configuration (MUST BE FIRST)
 const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  process.env.ADMIN_URL,
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5175',
+  ...parseOrigins(process.env.CORS_ORIGINS),
+  ...parseOrigins(process.env.FRONTEND_URL),
+  ...parseOrigins(process.env.ADMIN_URL),
+
+  // Local Development
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5175",
 ].filter(Boolean);
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+const allowedOriginPatterns = [
+  /^https:\/\/[a-z0-9-]+-(5173|5174|5175)\.csb\.app$/i,
+  /^https:\/\/[a-z0-9-]+-(5173|5174|5175)\.preview\.app\.github\.dev$/i,
+];
+
+const isAllowedOrigin = (origin) =>
+  allowedOrigins.includes("*") ||
+  allowedOrigins.includes(origin) ||
+  allowedOriginPatterns.some((pattern) => pattern.test(origin));
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+      } else {
+        logger.warn(`Blocked CORS origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+
+    credentials: true,
+
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+
+    allowedHeaders: ["Content-Type", "Authorization", "token", "Accept"],
+
+    exposedHeaders: ["Content-Range", "X-Content-Range"],
+  })
+);
+
+// ─────────────────────────────────────────────────────────────
+// Security Middleware
+// ─────────────────────────────────────────────────────────────
+app.use(
+  helmet({
+    crossOriginResourcePolicy: {
+      policy: "cross-origin",
+    },
+  })
+);
+
+// ─────────────────────────────────────────────────────────────
+// Body Parsers
+// ─────────────────────────────────────────────────────────────
+app.use(
+  express.json({
+    limit: "10mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "10mb",
+  })
+);
+
+// ─────────────────────────────────────────────────────────────
+// MongoDB Injection Protection
+// ─────────────────────────────────────────────────────────────
+const sanitizeObject = (obj) => {
+  if (!obj || typeof obj !== "object") {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) => sanitizeObject(item));
+  }
+
+  const sanitized = {};
+
+  for (const key in obj) {
+    // Remove dangerous MongoDB operators
+    if (key.startsWith("$") || key.includes(".")) {
+      continue;
     }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'token', 'Accept'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range']
-}));
 
-// 2. Security Headers
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+    const value = obj[key];
 
-// 3. Rate Limiting
-const limiter = rateLimit({
-  max: 1000, // Increased for development
-  windowMs: 15 * 60 * 1000, 
-  message: 'Too many requests, please try again later'
+    sanitized[key] = typeof value === "object" ? sanitizeObject(value) : value;
+  }
+
+  return sanitized;
+};
+
+app.use((req, res, next) => {
+  try {
+    if (req.body && typeof req.body === "object") {
+      req.body = sanitizeObject(req.body);
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
-app.use('/api', limiter);
 
-const authLimiter = rateLimit({
-  max: 100,
-  windowMs: 15 * 60 * 1000,
-  message: 'Too many login/register attempts'
-});
-app.use('/api/user/login', authLimiter);
-app.use('/api/user/register', authLimiter);
-
-// 4. Body Parsers
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// 5. Data Sanitization
-app.use(mongoSanitize());
-app.use(xss());
+// ─────────────────────────────────────────────────────────────
+// Prevent HTTP Parameter Pollution
+// ─────────────────────────────────────────────────────────────
 app.use(hpp());
 
-// 6. Cookies
+// ─────────────────────────────────────────────────────────────
+// Cookies
+// ─────────────────────────────────────────────────────────────
 app.use(cookieParser());
 
-// 7. Static Files
-app.use(express.static('public'));
-app.use('/images', express.static('uploads'));
+// ─────────────────────────────────────────────────────────────
+// Rate Limiting
+// ─────────────────────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
 
-// 8. Routes
-app.use('/api/foods', foodRouter);
-app.use('/api/user', userRouter);
-app.use('/api/cart', cartRouter);
-app.use('/api/order', orderRouter);
-app.use('/api/favorite', favoriteRouter);
-app.use('/api/review', reviewRouter);
-app.use('/api/mpesa', mpesaRouter);
-app.use('/api/audit', auditLogRouter);
-app.use('/api/settings', settingsRouter);
+  max: process.env.NODE_ENV === "production" ? 200 : 1000,
 
-app.get('/', (req, res) => {
-  res.send('API WORKING');
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  message: {
+    success: false,
+    message: "Too many requests. Please try again later.",
+  },
 });
 
-// 9. Error Handling
+app.use("/api", apiLimiter);
+
+// Authentication Limiter
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+
+  max: process.env.NODE_ENV === "production" ? 10 : 100,
+
+  standardHeaders: true,
+  legacyHeaders: false,
+
+  message: {
+    success: false,
+    message: "Too many login attempts. Please try again later.",
+  },
+});
+
+app.use("/api/user/login", authLimiter);
+app.use("/api/user/register", authLimiter);
+app.use("/api/user/admin-login", authLimiter);
+
+// ─────────────────────────────────────────────────────────────
+// Static Files
+// ─────────────────────────────────────────────────────────────
+app.use(express.static("public"));
+app.use("/images", express.static("uploads"));
+
+// ─────────────────────────────────────────────────────────────
+// API Routes
+// ─────────────────────────────────────────────────────────────
+app.use("/api/foods", foodRouter);
+app.use("/api/user", userRouter);
+app.use("/api/cart", cartRouter);
+app.use("/api/order", orderRouter);
+app.use("/api/favorite", favoriteRouter);
+app.use("/api/review", reviewRouter);
+app.use("/api/mpesa", mpesaRouter);
+app.use("/api/audit", auditLogRouter);
+app.use("/api/settings", settingsRouter);
+
+// ─────────────────────────────────────────────────────────────
+// Health Check Route
+// ─────────────────────────────────────────────────────────────
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API WORKING",
+    environment: process.env.NODE_ENV,
+    timestamp: new Date(),
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// 404 Handler
+// ─────────────────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Global Error Handler
+// ─────────────────────────────────────────────────────────────
 app.use(errorHandler);
 
+// ─────────────────────────────────────────────────────────────
+// Start Server
+// ─────────────────────────────────────────────────────────────
 app.listen(port, () => {
-  console.log(`Server started on http://localhost:${port}`);
+  logger.info(`🚀 Server running on http://localhost:${port}`);
 });
