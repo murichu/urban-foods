@@ -18,6 +18,7 @@ import orderRouter from "./routes/orderRoute.js";
 import favoriteRouter from "./routes/favoriteRoute.js";
 import reviewRouter from "./routes/reviewRoute.js";
 import mpesaRouter from "./routes/mpesaRoute.js";
+import paymentRouter from "./routes/paymentRoute.js";
 import auditLogRouter from "./routes/auditLogRoute.js";
 import settingsRouter from "./routes/settingsRoute.js";
 
@@ -245,6 +246,7 @@ app.use("/api/order", orderRouter);
 app.use("/api/favorite", favoriteRouter);
 app.use("/api/review", reviewRouter);
 app.use("/api/mpesa", mpesaRouter);
+app.use("/api/payments", paymentRouter);
 app.use("/api/audit", auditLogRouter);
 app.use("/api/settings", settingsRouter);
 

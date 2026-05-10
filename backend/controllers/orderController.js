@@ -1,345 +1,1058 @@
-import orderModel from '../models/orderModel.js';
-import userModel from '../models/userModel.js';
-import paymentModel from '../models/paymentModel.js';
-import { generateCustomId } from '../utils/idGenerator.js';
-import logger from '../config/logger.js';
-import { initiateMpesaStkPush } from '../services/mpesaService.js';
-import { createAuditLog } from './auditLogController.js';
-import auditLogModel from '../models/auditLogModel.js';
-import mongoose from 'mongoose';
-import os from 'os';
+import mongoose from "mongoose";
+import os from "os";
 
-const DELIVERY_FEE = 2;
+import orderModel from "../models/orderModel.js";
+import userModel from "../models/userModel.js";
+import paymentModel from "../models/paymentModel.js";
+import foodModel from "../models/foodModel.js";
+import settingsModel from "../models/settingsModel.js";
+import auditLogModel from "../models/auditLogModel.js";
 
-/**
- * Place order and initiate M-Pesa STK Push with Enterprise ID and Retry Logic
- */
+import logger from "../config/logger.js";
+
+import { DELIVERY_FEE } from "../config/orderConfig.js";
+import { generateCustomId } from "../utils/idGenerator.js";
+
+import { initiateMpesaStkPush } from "../services/mpesaService.js";
+
+import { createAuditLog } from "./auditLogController.js";
+
+/* =========================================================
+   DELIVERY FEE
+========================================================= */
+
+const getConfiguredDeliveryFee = async () => {
+  const settings = await settingsModel.findOne({
+    type: "business_profile",
+  });
+
+  const deliveryFee = Number(settings?.deliveryFee);
+
+  return Number.isFinite(deliveryFee) && deliveryFee >= 0
+    ? deliveryFee
+    : DELIVERY_FEE;
+};
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const normalizeKenyanPhone = (phone) => {
+  let normalized = phone?.replace(/\s+/g, "").replace("+", "");
+
+  if (normalized?.startsWith("0")) {
+    normalized = "254" + normalized.substring(1);
+  } else if (normalized?.startsWith("7") || normalized?.startsWith("1")) {
+    normalized = "254" + normalized;
+  }
+
+  return normalized;
+};
+
+const isValidKenyanPhone = (phone) => {
+  return /^(254)(7|1)\d{8}$/.test(phone);
+};
+
+const serializeOrder = (order) => {
+  const serialized = order.toObject ? order.toObject() : order;
+
+  if (serialized.paymentStatus === "Paid") {
+    serialized.payment = true;
+  }
+
+  return serialized;
+};
+
+const syncOrderPaymentState = async (order) => {
+  if (!order) return order;
+
+  if (order.payment || order.paymentStatus === "Paid") {
+    if (!order.payment || order.paymentStatus !== "Paid") {
+      order.payment = true;
+      order.paymentStatus = "Paid";
+
+      await order.save();
+    }
+
+    return order;
+  }
+
+  const completedPayment = await paymentModel.exists({
+    orderId: order._id,
+    status: "completed",
+  });
+
+  if (completedPayment) {
+    order.payment = true;
+    order.paymentStatus = "Paid";
+
+    await order.save();
+  }
+
+  return order;
+};
+
+/* =========================================================
+   PLACE ORDER
+========================================================= */
+
 const placeOrder = async (req, res) => {
   let { items, amount, address, phoneNumber, userId } = req.body;
-  
+
   if (!phoneNumber && address?.phone) {
     phoneNumber = address.phone;
   }
-  
+
   if (!items || !amount || !address || !phoneNumber) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Missing required fields: items, amount, address, phoneNumber' 
+    return res.status(400).json({
+      success: false,
+      message: "Missing required fields",
     });
   }
-  
-  // Normalize phone number (Kenyan format)
-  let normalizedPhone = phoneNumber.replace(/\s+/g, '').replace('+', '');
-  if (normalizedPhone.startsWith('0')) {
-    normalizedPhone = '254' + normalizedPhone.substring(1);
-  } else if (normalizedPhone.startsWith('7') || normalizedPhone.startsWith('1')) {
-    normalizedPhone = '254' + normalizedPhone;
-  }
-  
-  const phoneRegex = /^(254)(7|1)\d{8}$/;
-  if (!phoneRegex.test(normalizedPhone)) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Invalid phone number format. Use 07xxxxxxxx or 2547xxxxxxxx.' 
+
+  const numericAmount = Number(amount);
+
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid order amount",
     });
   }
-  
+
+  const normalizedPhone = normalizeKenyanPhone(phoneNumber);
+
+  if (!isValidKenyanPhone(normalizedPhone)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid phone number",
+    });
+  }
+
+  let newOrder;
+
   try {
-    let newOrder;
+    const deliveryFee = await getConfiguredDeliveryFee();
+
+    const finalAmount = numericAmount + deliveryFee;
+
     let attempts = 0;
     const maxAttempts = 5;
 
-    // Retry logic for unique ID collisions
     while (attempts < maxAttempts) {
       try {
-        const orderId = generateCustomId('ORD');
-        const trackingId = generateCustomId('TRK');
+        const orderId = generateCustomId("ORD");
+        const trackingId = generateCustomId("TRK");
 
         newOrder = new orderModel({
           userId,
           items,
-          amount: amount + DELIVERY_FEE,
+          amount: finalAmount,
           address,
           orderId,
           trackingId,
+          payment: false,
+          paymentStatus: "Pending",
+          status: "Order Placed",
         });
 
         await newOrder.save();
-        break; // Success
+
+        break;
       } catch (error) {
-        if (error.code === 11000 && (error.message.includes('orderId') || error.message.includes('trackingId'))) {
+        if (
+          error.code === 11000 &&
+          (error.message.includes("orderId") ||
+            error.message.includes("trackingId"))
+        ) {
           attempts++;
-          logger.warn(`Collision detected for Order/Tracking ID. Retrying... (${attempts}/${maxAttempts})`);
-          if (attempts === maxAttempts) throw new Error('Failed to generate unique IDs after 5 attempts');
+
+          logger.warn(`ID collision retry ${attempts}/${maxAttempts}`);
+
+          if (attempts === maxAttempts) {
+            throw new Error("Failed to generate unique order IDs");
+          }
         } else {
           throw error;
         }
       }
     }
 
-    await userModel.findByIdAndUpdate(userId, { cartData: {} });
+    /* CLEAR CART */
 
-    // Log order placement
-    await createAuditLog({
-      userId,
-      action: 'ORDER_PLACE',
-      entity: 'Order',
-      entityId: newOrder._id.toString(),
-      status: 'success',
-      metadata: { orderId: newOrder.orderId, trackingId: newOrder.trackingId, amount: newOrder.amount },
-      ipAddress: req.ip,
-      userAgent: req.get('User-Agent')
+    await userModel.findByIdAndUpdate(userId, {
+      cartData: {},
     });
 
-    // Initiate M-Pesa Payment
+    /* AUDIT */
+
+    await createAuditLog({
+      userId,
+      action: "ORDER_PLACE",
+      entity: "Order",
+      entityId: newOrder._id.toString(),
+      status: "success",
+      metadata: {
+        orderId: newOrder.orderId,
+        trackingId: newOrder.trackingId,
+        amount: newOrder.amount,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get("User-Agent"),
+    });
+
+    /* INITIATE STK PUSH */
+
     const mpesaResponse = await initiateMpesaStkPush(
-      amount + DELIVERY_FEE,
+      newOrder.amount,
       normalizedPhone,
       newOrder._id,
       newOrder.orderId
     );
 
-    if (mpesaResponse.ResponseCode === '0') {
-      logger.info(`Order ${newOrder.orderId} placed and STK Push initiated`);
-      res.json({ 
-        success: true, 
-        message: 'Order placed. M-Pesa STK Push initiated.',
+    /* SUCCESS */
+
+    if (mpesaResponse.ResponseCode === "0") {
+      logger.info(`STK Push initiated for ${newOrder.orderId}`);
+
+      return res.status(200).json({
+        success: true,
+        message: "M-Pesa prompt sent successfully",
+
         orderId: newOrder._id,
+
         enterpriseOrderId: newOrder.orderId,
+
         trackingId: newOrder.trackingId,
-        stkResponse: mpesaResponse
-      });
-    } else {
-      // We keep the order but mark it as payment pending/failed
-      newOrder.paymentStatus = 'Failed';
-      await newOrder.save();
-      
-      res.status(500).json({
-        success: false,
-        message: `M-Pesa STK Push failed: ${mpesaResponse.ResponseDescription}`,
-        orderId: newOrder._id,
-        enterpriseOrderId: newOrder.orderId
+
+        checkoutRequestId: mpesaResponse.CheckoutRequestID,
+
+        customerMessage: mpesaResponse.CustomerMessage,
+
+        stkResponse: mpesaResponse,
       });
     }
+
+    /* FAILED STK */
+
+    logger.warn(`STK Push failed for ${newOrder.orderId}`);
+
+    newOrder.payment = false;
+    newOrder.paymentStatus = "Failed";
+
+    await newOrder.save();
+
+    /* AUDIT FAILURE */
+
+    await createAuditLog({
+      userId,
+      action: "PAYMENT_FAILED",
+      entity: "Order",
+      entityId: newOrder._id.toString(),
+      status: "failed",
+      metadata: {
+        orderId: newOrder.orderId,
+        trackingId: newOrder.trackingId,
+        responseCode: mpesaResponse.ResponseCode,
+        responseDescription: mpesaResponse.ResponseDescription,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get("User-Agent"),
+    });
+
+    /* DELETE FAILED ORDER */
+
+    await orderModel.findByIdAndDelete(newOrder._id);
+
+    logger.info(`Deleted failed order ${newOrder.orderId}`);
+
+    return res.status(400).json({
+      success: false,
+      paymentStatus: "Failed",
+      responseCode: mpesaResponse.ResponseCode,
+      message: mpesaResponse.ResponseDescription || "STK Push failed",
+    });
   } catch (error) {
-    logger.error(`Error in placeOrder: ${error.message}`);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Error processing order' 
+    if (newOrder?._id && !newOrder.payment) {
+      try {
+        await orderModel.findByIdAndDelete(newOrder._id);
+
+        logger.warn(`Cleaned failed order ${newOrder.orderId}`);
+      } catch (cleanupError) {
+        logger.error(cleanupError.message);
+      }
+    }
+
+    logger.error(`Place order error: ${error.message}`);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Error placing order",
     });
   }
 };
 
-/**
- * Verify order payment status (Legacy/Webhook fallback)
- */
+/* =========================================================
+   VERIFY ORDER
+========================================================= */
+
 const verifyOrder = async (req, res) => {
-  const { orderId, success } = req.body;
+  const {
+    orderId,
+    success,
+
+    transactionId,
+    mpesaReceiptNumber,
+    paymentMethod,
+    CheckoutRequestID,
+    MerchantRequestID,
+    phoneNumber,
+    amount,
+  } = req.body;
 
   if (!orderId) {
-    return res.status(400).json({ success: false, message: 'Order ID is required' });
+    return res.status(400).json({
+      success: false,
+      message: "Order ID required",
+    });
   }
-  
+
   try {
-    const status = success ? 'Paid' : 'Failed';
-    const updatedOrder = await orderModel.findByIdAndUpdate(
-      orderId,
-      { paymentStatus: status, payment: success },
-      { new: true }
-    );
-    
-    if (!updatedOrder) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+    /**
+     * Find Order
+     */
+    const order = await orderModel.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
-    
-    return res.status(200).json({ success, message: status });
+
+    /**
+     * PAYMENT SUCCESS
+     */
+    if (success) {
+      // Update payment state
+      order.payment = true;
+
+      order.paymentStatus = "Paid";
+
+      // Save payment details directly on order
+      order.transactionId =
+        transactionId || mpesaReceiptNumber || order.transactionId || null;
+
+      order.mpesaReceiptNumber = mpesaReceiptNumber || transactionId || null;
+
+      order.paymentMethod = paymentMethod || "M-Pesa";
+
+      order.paymentDate = new Date();
+
+      order.CheckoutRequestID =
+        CheckoutRequestID || order.CheckoutRequestID || null;
+
+      order.MerchantRequestID =
+        MerchantRequestID || order.MerchantRequestID || null;
+
+      order.phoneNumber = phoneNumber || order.phoneNumber || null;
+
+      await order.save();
+
+      /**
+       * Create Payment Record
+       */
+      const existingPayment = await paymentModel.findOne({
+        orderId: order._id,
+
+        transactionId: transactionId || mpesaReceiptNumber,
+      });
+
+      // Prevent duplicate payments
+      if (!existingPayment) {
+        const payment = new paymentModel({
+          userId: order.userId,
+
+          orderId: order._id,
+
+          paymentId: order.paymentId,
+
+          method: "mpesa_stk",
+
+          paymentMethod: paymentMethod || "M-Pesa",
+
+          amount: amount || order.amount,
+
+          status: "completed",
+
+          transactionId: transactionId || mpesaReceiptNumber,
+
+          mpesaReceiptNumber: mpesaReceiptNumber || transactionId,
+
+          phoneNumber: phoneNumber || null,
+
+          CheckoutRequestID,
+
+          MerchantRequestID,
+        });
+
+        await payment.save();
+      }
+
+      /**
+       * Audit Log
+       */
+      await createAuditLog({
+        userId: order.userId,
+
+        action: "PAYMENT_SUCCESS",
+
+        entity: "Order",
+
+        entityId: order._id.toString(),
+
+        status: "success",
+
+        metadata: {
+          orderId: order.orderId,
+
+          trackingId: order.trackingId,
+
+          transactionId: transactionId || mpesaReceiptNumber,
+
+          amount: amount || order.amount,
+        },
+
+        ipAddress: req.ip,
+
+        userAgent: req.get("User-Agent"),
+      });
+
+      logger.info(`Payment verified successfully for ${order.orderId}`);
+
+      return res.status(200).json({
+        success: true,
+
+        message: "Payment verified successfully",
+
+        data: {
+          orderId: order._id,
+
+          transactionId: order.transactionId,
+
+          paymentStatus: order.paymentStatus,
+        },
+      });
+    }
+
+    /**
+     * PAYMENT FAILED
+     */
+    order.payment = false;
+
+    order.paymentStatus = "Failed";
+
+    await order.save();
+
+    /**
+     * Audit Failed Payment
+     */
+    await createAuditLog({
+      userId: order.userId,
+
+      action: "PAYMENT_FAILED",
+
+      entity: "Order",
+
+      entityId: order._id.toString(),
+
+      status: "failed",
+
+      metadata: {
+        orderId: order.orderId,
+
+        trackingId: order.trackingId,
+      },
+
+      ipAddress: req.ip,
+
+      userAgent: req.get("User-Agent"),
+    });
+
+    /**
+     * Delete Failed Order
+     */
+    await orderModel.findByIdAndDelete(order._id);
+
+    logger.warn(`Deleted failed payment order ${order.orderId}`);
+
+    return res.status(400).json({
+      success: false,
+
+      message: "Payment failed. Order cancelled.",
+    });
   } catch (error) {
     logger.error(`Verify order error: ${error.message}`);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Internal server error",
+    });
   }
 };
+/* =========================================================
+   USER ORDERS
+========================================================= */
 
-/**
- * Retrieve user orders
- */
 const userOrders = async (req, res) => {
   const { userId } = req.body;
 
   if (!userId) {
-    return res.status(400).json({ success: false, message: 'User ID is required' });
+    return res.status(400).json({
+      success: false,
+      message: "User ID required",
+    });
   }
-  
-  try {
-    const orders = await orderModel.find({ userId }).sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: orders });
-  } catch (error) {
-    logger.error(`User orders error: ${error.message}`);
-    return res.status(500).json({ success: false, message: 'Error retrieving orders' });
-  }
-};
-
-/**
- * List all orders with pagination and sorting (Admin)
- */
-const listOrders = async (req, res) => {
-  const {
-    page = 1,
-    limit = 10,
-    sortBy = 'createdAt',
-    order = 'desc',
-    search = '',
-    status = '',
-    paymentStatus = ''
-  } = req.query;
-  
-  const pageNum = Math.max(1, parseInt(page));
-  const limitNum = Math.min(500, Math.max(1, parseInt(limit)));
-  const sortOrder = order === 'asc' ? 1 : -1;
 
   try {
-    const filter = {};
-    
-    // Status Filter
-    if (status && status !== 'All') {
-      filter.status = status;
-    }
-    
-    // Payment Status Filter
-    if (paymentStatus && paymentStatus !== 'All') {
-      filter.paymentStatus = paymentStatus;
-    }
+    /**
+     * Fetch User Orders
+     */
+    const orders = await orderModel.find({ userId }).sort({
+      createdAt: -1,
+    });
 
-    if (search) {
-      filter.$or = [
-        { orderId: new RegExp(search, 'i') },
-        { trackingId: new RegExp(search, 'i') },
-        { status: new RegExp(search, 'i') },
-        { 'address.firstName': new RegExp(search, 'i') },
-        { 'address.lastName': new RegExp(search, 'i') },
-        { 'address.email': new RegExp(search, 'i') },
-        { 'address.phone': new RegExp(search, 'i') },
-      ];
-      // Try matching ObjectId if it looks like one
-      if (search.match(/^[0-9a-fA-F]{24}$/)) {
-        filter.$or.push({ _id: search });
-      }
-    }
+    /**
+     * Sync Payment States
+     */
+    const syncedOrders = await Promise.all(orders.map(syncOrderPaymentState));
 
-    logger.info(`Fetching orders with filter: ${JSON.stringify(filter)}`);
+    /**
+     * Enrich Orders
+     */
+    const enrichedOrders = await Promise.all(
+      syncedOrders.map(async (order) => {
+        /**
+         * Find Latest Successful Payment
+         */
+        const payment = await paymentModel
+          .findOne({
+            orderId: order._id,
 
-    const orders = await orderModel
-      .find(filter)
-      .sort({ [sortBy]: sortOrder })
-      .skip((pageNum - 1) * limitNum)
-      .limit(limitNum);
+            status: {
+              $in: [
+                "completed",
+                "Completed",
+                "success",
+                "Success",
+                "paid",
+                "Paid",
+              ],
+            },
+          })
+          .sort({
+            createdAt: -1,
+          });
 
-    const totalOrders = await orderModel.countDocuments(filter);
+        const serializedOrder = serializeOrder(order);
 
-    res.status(200).json({
+        /**
+         * Normalize Transaction ID
+         */
+        const transactionId =
+          serializedOrder.transactionId ||
+          serializedOrder.mpesaReceiptNumber ||
+          payment?.transactionId ||
+          payment?.mpesaReceiptNumber ||
+          payment?.receiptNumber ||
+          payment?.CheckoutRequestID ||
+          payment?.MpesaReceiptNumber ||
+          payment?.MerchantRequestID ||
+          null;
+
+        /**
+         * Normalize Payment Method
+         */
+        const paymentMethod =
+          serializedOrder.paymentMethod ||
+          payment?.method ||
+          payment?.paymentMethod ||
+          "M-Pesa";
+
+        /**
+         * Normalize Payment Status
+         */
+        const paymentStatus =
+          serializedOrder.paymentStatus ||
+          payment?.status ||
+          (serializedOrder.payment ? "Paid" : "Pending");
+
+        /**
+         * Normalize Payment Date
+         */
+        const paymentDate =
+          serializedOrder.paymentDate ||
+          payment?.createdAt ||
+          payment?.updatedAt ||
+          null;
+
+        return {
+          ...serializedOrder,
+
+          /**
+           * Core Payment Fields
+           */
+          transactionId,
+
+          mpesaReceiptNumber:
+            serializedOrder.mpesaReceiptNumber ||
+            payment?.mpesaReceiptNumber ||
+            payment?.MpesaReceiptNumber ||
+            transactionId ||
+            null,
+
+          paymentMethod,
+
+          paymentStatus,
+
+          paymentDate,
+
+          /**
+           * Additional Payment References
+           */
+          paymentReference:
+            payment?.reference ||
+            serializedOrder.MerchantRequestID ||
+            payment?.MerchantRequestID ||
+            null,
+
+          checkoutRequestId:
+            serializedOrder.CheckoutRequestID ||
+            payment?.CheckoutRequestID ||
+            null,
+
+          merchantRequestId:
+            serializedOrder.MerchantRequestID ||
+            payment?.MerchantRequestID ||
+            null,
+
+          /**
+           * Payment Summary
+           */
+          paymentDetails: {
+            id: payment?._id || null,
+
+            amount: payment?.amount || serializedOrder.amount,
+
+            transactionId,
+
+            mpesaReceiptNumber:
+              serializedOrder.mpesaReceiptNumber ||
+              payment?.mpesaReceiptNumber ||
+              payment?.MpesaReceiptNumber ||
+              transactionId ||
+              null,
+
+            paymentMethod,
+
+            status: paymentStatus,
+
+            reference: payment?.reference || null,
+
+            checkoutRequestId:
+              serializedOrder.CheckoutRequestID ||
+              payment?.CheckoutRequestID ||
+              null,
+
+            merchantRequestId:
+              serializedOrder.MerchantRequestID ||
+              payment?.MerchantRequestID ||
+              null,
+
+            phoneNumber:
+              serializedOrder.phoneNumber || payment?.phoneNumber || null,
+
+            createdAt: paymentDate,
+          },
+        };
+      })
+    );
+
+    return res.status(200).json({
       success: true,
-      data: orders,
-      currentPage: pageNum,
-      totalPages: Math.ceil(totalOrders / limitNum),
-      totalOrders,
+
+      count: enrichedOrders.length,
+
+      data: enrichedOrders,
     });
   } catch (error) {
-    logger.error(`Error listing orders: ${error.message}`);
-    res.status(500).json({ success: false, message: 'Error retrieving all orders' });
+    logger.error(`User orders error: ${error.message}`);
+
+    return res.status(500).json({
+      success: false,
+
+      message: "Error retrieving orders",
+    });
   }
 };
 
-/**
- * Update order status (admin)
- */
+/* =========================================================
+   LIST ORDERS (ADMIN)
+========================================================= */
+
+const listOrders = async (req, res) => {
+  try {
+    const orders = await orderModel.find({}).sort({
+      createdAt: -1,
+    });
+
+    const syncedOrders = await Promise.all(orders.map(syncOrderPaymentState));
+
+    return res.status(200).json({
+      success: true,
+      data: syncedOrders.map(serializeOrder),
+    });
+  } catch (error) {
+    logger.error(`List orders error: ${error.message}`);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error retrieving orders",
+    });
+  }
+};
+
+/* =========================================================
+   UPDATE ORDER STATUS
+========================================================= */
+
 const updateOrderStatus = async (req, res) => {
   const { orderId, status } = req.body;
-  const VALID_STATUSES = ['Order Placed', 'Food Processing', 'Out for Delivery', 'Delivered', 'Cancelled'];
+
+  const VALID_STATUSES = [
+    "Order Placed",
+    "Food Processing",
+    "Out for Delivery",
+    "Delivered",
+    "Cancelled",
+  ];
 
   if (!orderId || !status || !VALID_STATUSES.includes(status)) {
-    return res.status(400).json({ success: false, message: 'Invalid orderId or status' });
+    return res.status(400).json({
+      success: false,
+      message: "Invalid order status",
+    });
   }
 
   try {
-    const updated = await orderModel.findByIdAndUpdate(orderId, { status }, { new: true });
-    if (!updated) return res.status(404).json({ success: false, message: 'Order not found' });
-    return res.status(200).json({ success: true, message: 'Order status updated', data: updated });
+    const order = await orderModel.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    await syncOrderPaymentState(order);
+
+    const requiresPayment = [
+      "Food Processing",
+      "Out for Delivery",
+      "Delivered",
+    ].includes(status);
+
+    if (requiresPayment && !order.payment) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment not received",
+      });
+    }
+
+    order.status = status;
+
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Order updated successfully",
+      data: serializeOrder(order),
+    });
   } catch (error) {
-    logger.error(`Update order status error: ${error.message}`);
-    return res.status(500).json({ success: false, message: 'Error updating status' });
+    logger.error(error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error updating order",
+    });
   }
 };
 
-/**
- * Get a single order by ID
- */
+/* =========================================================
+   GET ORDER BY ID
+========================================================= */
+
 const getOrderById = async (req, res) => {
   const { id } = req.params;
+
   try {
     const order = await orderModel.findById(id);
-    if (!order) return res.status(404).json({ success: false, message: 'Order not found' });
-    return res.status(200).json({ success: true, data: order });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    await syncOrderPaymentState(order);
+
+    const payment = await paymentModel
+      .findOne({
+        orderId: order._id,
+        status: { $in: ["completed", "Completed", "success", "Success"] },
+      })
+      .sort({ createdAt: -1 });
+
+    const serializedOrder = serializeOrder(order);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        ...serializedOrder,
+        transactionId:
+          payment?.transactionId || payment?.MpesaReceiptNumber || null,
+        paymentReference: payment?.reference || null,
+        paymentMethod: payment?.method || "M-Pesa",
+        paymentDate: payment?.createdAt || null,
+      },
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Error retrieving order' });
+    return res.status(500).json({
+      success: false,
+      message: "Error retrieving order",
+    });
   }
 };
 
-/**
- * Get Admin Statistics for Dashboard
- */
+/* =========================================================
+   GET USER ORDER BY ID
+========================================================= */
+
+const getUserOrderById = async (req, res) => {
+  const { id } = req.params;
+
+  const userId = req.userId || req.body.userId;
+
+  try {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order ID",
+      });
+    }
+
+    /**
+     * Find Order
+     */
+    const order = await orderModel.findOne({
+      _id: id,
+      userId,
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    /**
+     * Sync Payment State
+     */
+    await syncOrderPaymentState(order);
+
+    /**
+     * Get Latest Successful Payment
+     */
+    const payment = await paymentModel
+      .findOne({
+        orderId: order._id,
+
+        status: {
+          $in: ["completed", "Completed", "success", "Success", "paid", "Paid"],
+        },
+      })
+      .sort({
+        createdAt: -1,
+      });
+
+    const serializedOrder = serializeOrder(order);
+
+    /**
+     * Normalize Transaction ID
+     */
+    const transactionId =
+      serializedOrder.transactionId ||
+      serializedOrder.mpesaReceiptNumber ||
+      payment?.transactionId ||
+      payment?.mpesaReceiptNumber ||
+      payment?.receiptNumber ||
+      payment?.CheckoutRequestID ||
+      payment?.MpesaReceiptNumber ||
+      payment?.MerchantRequestID ||
+      null;
+
+    const enrichedOrder = {
+      ...serializedOrder,
+
+      transactionId,
+
+      mpesaReceiptNumber:
+        serializedOrder.mpesaReceiptNumber ||
+        payment?.mpesaReceiptNumber ||
+        payment?.MpesaReceiptNumber ||
+        transactionId ||
+        null,
+
+      paymentMethod:
+        serializedOrder.paymentMethod ||
+        payment?.method ||
+        payment?.paymentMethod ||
+        "M-Pesa",
+
+      paymentStatus:
+        serializedOrder.paymentStatus ||
+        payment?.status ||
+        (serializedOrder.payment ? "Paid" : "Pending"),
+
+      paymentDate:
+        serializedOrder.paymentDate ||
+        payment?.createdAt ||
+        payment?.updatedAt ||
+        null,
+
+      checkoutRequestId:
+        serializedOrder.CheckoutRequestID || payment?.CheckoutRequestID || null,
+
+      merchantRequestId:
+        serializedOrder.MerchantRequestID || payment?.MerchantRequestID || null,
+
+      paymentDetails: payment
+        ? {
+            id: payment._id,
+
+            amount: payment.amount || serializedOrder.amount,
+
+            transactionId,
+
+            mpesaReceiptNumber:
+              payment.mpesaReceiptNumber ||
+              payment.MpesaReceiptNumber ||
+              transactionId,
+
+            paymentMethod: payment.method || "M-Pesa",
+
+            status: payment.status || "Pending",
+
+            phoneNumber: payment.phoneNumber || null,
+
+            checkoutRequestId: payment.CheckoutRequestID || null,
+
+            merchantRequestId: payment.MerchantRequestID || null,
+
+            createdAt: payment.createdAt || null,
+          }
+        : null,
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: enrichedOrder,
+    });
+  } catch (error) {
+    logger.error(`Get user order error: ${error.message}`);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error retrieving order",
+    });
+  }
+};
+
+/* =========================================================
+   ADMIN STATS
+========================================================= */
+
 const getAdminStats = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const stats = await orderModel.aggregate([
-      {
-        $facet: {
-          dailyRevenue: [
-            { 
-              $match: { 
-                createdAt: { $gte: today },
-                payment: true 
-              } 
+    const [
+      totalOrders,
+      totalCustomers,
+      totalMenuItems,
+      totalRevenue,
+      recentOrders,
+    ] = await Promise.all([
+      orderModel.countDocuments(),
+      userModel.countDocuments(),
+      foodModel.countDocuments(),
+      orderModel.aggregate([
+        {
+          $match: {
+            payment: true,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: "$amount",
             },
-            { $group: { _id: null, total: { $sum: "$amount" } } }
-          ],
-          totalOrders: [
-            { $count: "count" }
-          ],
-          pendingOrders: [
-            { $match: { status: { $in: ["Order Placed", "Food Processing"] } } },
-            { $count: "count" }
-          ],
-          deliveredOrders: [
-            { $match: { status: "Delivered" } },
-            { $count: "count" }
-          ]
-        }
-      }
+          },
+        },
+      ]),
+      orderModel
+        .find()
+        .sort({
+          createdAt: -1,
+        })
+        .limit(5),
     ]);
 
-    const recentLogs = await auditLogModel.find().sort({ createdAt: -1 }).limit(5);
-    const systemHealth = {
-      dbStatus: mongoose.connection.readyState === 1 ? 'Online' : 'Issues Detected',
-      apiStatus: 'Stable',
-      serverLoad: `${(os.loadavg()[0]).toFixed(2)}`
-    };
+    return res.status(200).json({
+      success: true,
+      stats: {
+        totalOrders,
+        totalCustomers,
+        totalMenuItems,
+        totalRevenue: totalRevenue?.[0]?.total || 0,
+        recentOrders,
+        systemHealth: {
+          dbStatus: mongoose.connection.readyState === 1 ? "Online" : "Offline",
 
-    const result = {
-      dailyRevenue: stats[0].dailyRevenue[0]?.total || 0,
-      totalOrders: stats[0].totalOrders[0]?.count || 0,
-      pendingOrders: stats[0].pendingOrders[0]?.count || 0,
-      deliveredOrders: stats[0].deliveredOrders[0]?.count || 0,
-      activeAdmins: 1, // Fixed for now as admin is env-based
-      recentActivity: recentLogs,
-      systemHealth
-    };
+          apiStatus: "Stable",
 
-    res.json({ success: true, stats: result });
+          serverLoad: Number(os.loadavg()[0].toFixed(2)),
+        },
+      },
+    });
   } catch (error) {
-    logger.error(`Get admin stats error: ${error.message}`);
-    res.status(500).json({ success: false, message: 'Error fetching stats' });
+    logger.error(`Admin stats error: ${error.message}`);
+
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching admin stats",
+    });
   }
 };
 
-export { placeOrder, verifyOrder, userOrders, listOrders, updateOrderStatus, getOrderById, getAdminStats };
+export {
+  placeOrder,
+  verifyOrder,
+  userOrders,
+  listOrders,
+  updateOrderStatus,
+  getOrderById,
+  getUserOrderById,
+  getAdminStats,
+};

@@ -5,11 +5,23 @@ import { StoreContext } from "../../Context/StoreContext";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import {
-  MapPin, Phone, Mail, User,
-  CreditCard, Truck, ShoppingBag,
-  ArrowRight, ShieldCheck, Clock,
-  CheckCircle, AlertCircle, Globe,
-  Home, Send, Smartphone, Lock
+  MapPin,
+  Phone,
+  Mail,
+  User,
+  CreditCard,
+  Truck,
+  ShoppingBag,
+  ArrowRight,
+  ShieldCheck,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  Globe,
+  Home,
+  Send,
+  Smartphone,
+  Lock,
 } from "lucide-react";
 
 const PlaceOrder = () => {
@@ -33,31 +45,50 @@ const PlaceOrder = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [mpesaSuccess, setMpesaSuccess] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState(null);
+  const [backendDeliveryFee, setBackendDeliveryFee] = useState(0);
+  const [activePaymentOrder, setActivePaymentOrder] = useState(null);
 
   const onChangeHandler = (event) => {
     const name = event.target.name;
     const value = event.target.value;
     setData((data) => ({ ...data, [name]: value }));
     if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: "" }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
+
+  useEffect(() => {
+    const fetchBusinessSettings = async () => {
+      try {
+        const response = await axios.get(`${url}/api/settings/get`);
+        if (response.data.success) {
+          setBackendDeliveryFee(Number(response.data.data?.deliveryFee) || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching business settings:", error);
+      }
+    };
+
+    if (url) {
+      fetchBusinessSettings();
+    }
+  }, [url]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
         const response = await axios.get(`${url}/api/user/profile`, {
-          headers: { token }
+          headers: { token },
         });
         if (response.data.success) {
           const user = response.data.user;
-          setData(prev => ({
+          setData((prev) => ({
             ...prev,
-            firstName: user.name?.split(' ')[0] || '',
-            lastName: user.name?.split(' ').slice(1).join(' ') || '',
-            email: user.email || '',
-            phone: user.phone || '',
-            street: user.address || ''
+            firstName: user.name?.split(" ")[0] || "",
+            lastName: user.name?.split(" ").slice(1).join(" ") || "",
+            email: user.email || "",
+            phone: user.phone || "",
+            street: user.address || "",
           }));
         }
       } catch (error) {
@@ -78,13 +109,15 @@ const PlaceOrder = () => {
     if (!data.firstName.trim()) newErrors.firstName = "First name required";
     if (!data.lastName.trim()) newErrors.lastName = "Last name required";
     if (!data.email.trim()) newErrors.email = "Email required";
-    else if (!/\S+@\S+\.\S+/.test(data.email)) newErrors.email = "Invalid email";
+    else if (!/\S+@\S+\.\S+/.test(data.email))
+      newErrors.email = "Invalid email";
     if (!data.street.trim()) newErrors.street = "Street address required";
     if (!data.city.trim()) newErrors.city = "City required";
     if (!data.state.trim()) newErrors.state = "State/County required";
     if (!data.postalCode.trim()) newErrors.postalCode = "Postal code required";
     if (!data.phone.trim()) newErrors.phone = "Phone number required";
-    else if (!/^[0-9+\s]{10,13}$/.test(data.phone.replace(/\s/g, ''))) newErrors.phone = "Valid phone required";
+    else if (!/^[0-9+\s]{10,13}$/.test(data.phone.replace(/\s/g, "")))
+      newErrors.phone = "Valid phone required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -132,26 +165,36 @@ const PlaceOrder = () => {
     }
 
     let orderItems = foodList
-      .filter(item => cartItems[item._id] > 0)
-      .map(item => ({ ...item, quantity: cartItems[item._id] }));
+      .filter((item) => cartItems[item._id] > 0)
+      .map((item) => ({ ...item, quantity: cartItems[item._id] }));
 
     let normalizedPhone = data.phone.replace(/\s+/g, "");
-    if (normalizedPhone.startsWith("0")) normalizedPhone = "254" + normalizedPhone.substring(1);
-    if (normalizedPhone.startsWith("+254")) normalizedPhone = normalizedPhone.substring(1);
+    if (normalizedPhone.startsWith("0"))
+      normalizedPhone = "254" + normalizedPhone.substring(1);
+    if (normalizedPhone.startsWith("+254"))
+      normalizedPhone = normalizedPhone.substring(1);
 
     setIsLoading(true);
     setPaymentStatus("processing");
 
     try {
-      const response = await axios.post(url + "/api/order/place", {
-        address: data,
-        items: orderItems,
-        amount,
-        phoneNumber: normalizedPhone,
-      }, { headers: { token } });
+      const response = await axios.post(
+        url + "/api/order/place",
+        {
+          address: data,
+          items: orderItems,
+          amount,
+          phoneNumber: normalizedPhone,
+        },
+        { headers: { token } }
+      );
 
       if (response.data.success) {
         toast.info("STK Push sent to your phone");
+        setActivePaymentOrder({
+          enterpriseOrderId: response.data.enterpriseOrderId,
+          phoneNumber: normalizedPhone,
+        });
         if (response.data.checkoutRequestId) {
           validateTransaction(response.data.checkoutRequestId);
         }
@@ -167,13 +210,54 @@ const PlaceOrder = () => {
     }
   };
 
+  const retryPayment = async () => {
+    if (!activePaymentOrder?.enterpriseOrderId) {
+      setIsLoading(false);
+      setPaymentStatus(null);
+      return;
+    }
+
+    setIsLoading(true);
+    setPaymentStatus("processing");
+
+    try {
+      const response = await axios.post(
+        `${url}/api/mpesa/stkpush`,
+        {
+          orderId: activePaymentOrder.enterpriseOrderId,
+          phoneNumber: activePaymentOrder.phoneNumber,
+          amount: finalAmount,
+        },
+        { headers: { token } }
+      );
+
+      if (response.data.success && response.data.checkoutRequestId) {
+        toast.info("STK Push sent again");
+        validateTransaction(response.data.checkoutRequestId);
+      } else {
+        toast.error(response.data.message || "Unable to retry payment");
+        setIsLoading(false);
+        setPaymentStatus("failed");
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Unable to retry payment");
+      setIsLoading(false);
+      setPaymentStatus("failed");
+    }
+  };
+
   const totalAmount = getTotalCartAmount();
-  const deliveryFee = totalAmount === 0 ? 0 : 200;
+  const deliveryFee = totalAmount === 0 ? 0 : backendDeliveryFee;
   const finalAmount = totalAmount + deliveryFee;
   const totalItems = Object.values(cartItems).reduce((a, b) => a + b, 0);
 
+  useEffect(() => {
+    if (totalAmount === 0 && !isLoading) {
+      navigate("/cart");
+    }
+  }, [totalAmount, isLoading, navigate]);
+
   if (totalAmount === 0 && !isLoading) {
-    navigate("/cart");
     return null;
   }
 
@@ -195,7 +279,9 @@ const PlaceOrder = () => {
             <span>Secure Checkout</span>
           </div>
           <h1>Complete Your Order</h1>
-          <p className="header-subtitle">Review items and provide delivery details</p>
+          <p className="header-subtitle">
+            Review items and provide delivery details
+          </p>
         </div>
 
         <div className="checkout-grid">
@@ -227,7 +313,9 @@ const PlaceOrder = () => {
                       placeholder="John"
                       className={errors.firstName ? "error" : ""}
                     />
-                    {errors.firstName && <span className="error-message">{errors.firstName}</span>}
+                    {errors.firstName && (
+                      <span className="error-message">{errors.firstName}</span>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>
@@ -242,7 +330,9 @@ const PlaceOrder = () => {
                       placeholder="Doe"
                       className={errors.lastName ? "error" : ""}
                     />
-                    {errors.lastName && <span className="error-message">{errors.lastName}</span>}
+                    {errors.lastName && (
+                      <span className="error-message">{errors.lastName}</span>
+                    )}
                   </div>
                 </div>
 
@@ -259,7 +349,9 @@ const PlaceOrder = () => {
                     placeholder="john@example.com"
                     className={errors.email ? "error" : ""}
                   />
-                  {errors.email && <span className="error-message">{errors.email}</span>}
+                  {errors.email && (
+                    <span className="error-message">{errors.email}</span>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -275,7 +367,9 @@ const PlaceOrder = () => {
                     placeholder="123 Main Street"
                     className={errors.street ? "error" : ""}
                   />
-                  {errors.street && <span className="error-message">{errors.street}</span>}
+                  {errors.street && (
+                    <span className="error-message">{errors.street}</span>
+                  )}
                 </div>
 
                 <div className="form-row">
@@ -289,7 +383,9 @@ const PlaceOrder = () => {
                       placeholder="Nairobi"
                       className={errors.city ? "error" : ""}
                     />
-                    {errors.city && <span className="error-message">{errors.city}</span>}
+                    {errors.city && (
+                      <span className="error-message">{errors.city}</span>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>State/County</label>
@@ -301,7 +397,9 @@ const PlaceOrder = () => {
                       placeholder="Nairobi County"
                       className={errors.state ? "error" : ""}
                     />
-                    {errors.state && <span className="error-message">{errors.state}</span>}
+                    {errors.state && (
+                      <span className="error-message">{errors.state}</span>
+                    )}
                   </div>
                 </div>
 
@@ -316,7 +414,9 @@ const PlaceOrder = () => {
                       placeholder="00100"
                       className={errors.postalCode ? "error" : ""}
                     />
-                    {errors.postalCode && <span className="error-message">{errors.postalCode}</span>}
+                    {errors.postalCode && (
+                      <span className="error-message">{errors.postalCode}</span>
+                    )}
                   </div>
                   <div className="form-group">
                     <label>
@@ -346,8 +446,12 @@ const PlaceOrder = () => {
                     placeholder="0712345678"
                     className={errors.phone ? "error" : ""}
                   />
-                  {errors.phone && <span className="error-message">{errors.phone}</span>}
-                  <span className="field-hint">We'll send payment prompt to this number</span>
+                  {errors.phone && (
+                    <span className="error-message">{errors.phone}</span>
+                  )}
+                  <span className="field-hint">
+                    We'll send payment prompt to this number
+                  </span>
                 </div>
               </form>
             </div>
@@ -384,26 +488,33 @@ const PlaceOrder = () => {
               <div className="summary-header">
                 <ShoppingBag size={18} />
                 <h3>Order Summary</h3>
-                <span className="item-badge">{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
+                <span className="item-badge">
+                  {totalItems} {totalItems === 1 ? "item" : "items"}
+                </span>
               </div>
 
               {/* Order Items */}
               <div className="order-items-list">
-                {foodList.filter(item => cartItems[item._id] > 0).map((item) => (
-                  <div key={item._id} className="order-item">
-                    <div className="item-image">
-                      <img src={url + "/images/" + item.image} alt={item.name} />
-                      <span className="item-qty">{cartItems[item._id]}</span>
+                {foodList
+                  .filter((item) => cartItems[item._id] > 0)
+                  .map((item) => (
+                    <div key={item._id} className="order-item">
+                      <div className="item-image">
+                        <img
+                          src={url + "/images/" + item.image}
+                          alt={item.name}
+                        />
+                        <span className="item-qty">{cartItems[item._id]}</span>
+                      </div>
+                      <div className="item-details">
+                        <span className="item-name">{item.name}</span>
+                        <span className="item-price">Ksh {item.price}</span>
+                      </div>
+                      <div className="item-total">
+                        Ksh {item.price * cartItems[item._id]}
+                      </div>
                     </div>
-                    <div className="item-details">
-                      <span className="item-name">{item.name}</span>
-                      <span className="item-price">Ksh {item.price}</span>
-                    </div>
-                    <div className="item-total">
-                      Ksh {item.price * cartItems[item._id]}
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
 
               {/* Price Breakdown */}
@@ -415,7 +526,9 @@ const PlaceOrder = () => {
                 <div className="breakdown-row">
                   <span>Delivery Fee</span>
                   <span className={deliveryFee === 0 ? "free" : ""}>
-                    {deliveryFee === 0 ? "Free" : `Ksh ${deliveryFee.toLocaleString()}`}
+                    {deliveryFee === 0
+                      ? "Free"
+                      : `Ksh ${deliveryFee.toLocaleString()}`}
                   </span>
                 </div>
                 <div className="divider"></div>
@@ -500,13 +613,14 @@ const PlaceOrder = () => {
               {!paymentStatus && "Placing Order..."}
             </h3>
             <p>
-              {paymentStatus === "processing" && "Check your phone for M-Pesa prompt"}
+              {paymentStatus === "processing" &&
+                "Check your phone for M-Pesa prompt"}
               {paymentStatus === "success" && "Redirecting to your orders..."}
               {paymentStatus === "failed" && "Please try again"}
               {!paymentStatus && "Please wait..."}
             </p>
             {paymentStatus === "failed" && (
-              <button className="retry-btn" onClick={() => setIsLoading(false)}>
+              <button className="retry-btn" onClick={retryPayment}>
                 Try Again
               </button>
             )}

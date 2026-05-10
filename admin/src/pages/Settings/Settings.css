@@ -163,6 +163,42 @@
   padding-left: 2.75rem;
 }
 
+.input-with-prefix {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.input-with-prefix span {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.85rem;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.85rem;
+  font-weight: 800;
+  border-right: 1px solid #e2e8f0;
+}
+
+.input-with-prefix input {
+  border: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.input-with-prefix input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.form-group label svg {
+  margin-right: 0.45rem;
+}
+
 .social-icon-label {
   display: inline-flex;
   align-items: center;

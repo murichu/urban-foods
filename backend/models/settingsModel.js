@@ -13,6 +13,7 @@ const settingsSchema = new mongoose.Schema({
   businessVat: { type: String, default: "" },
   invoicePrefix: { type: String, default: "INV-" },
   currency: { type: String, default: "KSh" },
+  deliveryFee: { type: Number, default: 0, min: 0 },
   logoUrl: { type: String, default: "" },
   socialLinks: {
     facebook: { type: String, default: "" },

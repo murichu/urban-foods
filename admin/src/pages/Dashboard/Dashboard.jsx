@@ -1,339 +1,314 @@
-import React, { useState, useEffect } from 'react';
-import { useAdminAuth } from '../../context/AdminAuthContext';
+import { useEffect, useMemo, useState } from "react";
+import { useAdminAuth } from "../../context/AdminAuthContext";
 import {
-  Search, ArrowRight, Mic, Calendar, 
-  ChevronDown, Shield, CreditCard, Activity, 
-  Settings, Lock, Zap, CheckCircle, AlertCircle, X
-} from 'lucide-react';
-import axios from 'axios';
-import toast from 'react-hot-toast';
-import './Dashboard.css';
+  Activity,
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  CreditCard,
+  Package,
+  RefreshCw,
+  ShoppingBag,
+  TrendingUp,
+  Truck,
+  Users,
+  Utensils,
+  Wallet,
+} from "lucide-react";
+import axios from "axios";
+import toast from "react-hot-toast";
+import "./Dashboard.css";
+
+const emptyStats = {
+  dailyRevenue: 0,
+  monthlyRevenue: 0,
+  totalRevenue: 0,
+  totalOrders: 0,
+  paidOrders: 0,
+  pendingOrders: 0,
+  pendingPaymentOrders: 0,
+  failedPaymentOrders: 0,
+  deliveredOrders: 0,
+  cancelledOrders: 0,
+  totalCustomers: 0,
+  totalMenuItems: 0,
+  statusBreakdown: {},
+  paymentBreakdown: {},
+  weeklyTrend: [],
+  topItems: [],
+  recentOrders: [],
+  recentActivity: [],
+  systemHealth: { dbStatus: "Loading", apiStatus: "Loading", serverLoad: 0 },
+};
+
+const money = (value) => `KSh ${Number(value || 0).toLocaleString()}`;
+const number = (value) => Number(value || 0).toLocaleString();
+
+const percent = (value, total) => {
+  if (!total) return 0;
+  return Math.round((Number(value || 0) / total) * 100);
+};
 
 const Dashboard = () => {
   const { adminToken } = useAdminAuth();
-  const url = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+  const url = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
 
-  const [stats, setStats] = useState({
-    dailyRevenue: 0,
-    totalOrders: 0,
-    pendingOrders: 0,
-    deliveredOrders: 0,
-    systemHealth: { dbStatus: 'Loading...', apiStatus: 'Loading...', serverLoad: '0' },
-    recentActivity: []
-  });
-
+  const [stats, setStats] = useState(emptyStats);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  const fetchStats = async () => {
+  const fetchStats = async ({ silent = false } = {}) => {
     try {
       const res = await axios.get(`${url}/api/order/stats`, {
-        headers: { token: adminToken }
+        headers: { token: adminToken },
       });
-      if (res.data.success) setStats(res.data.stats);
-    } catch {
-      toast.error("Failed to load stats");
+      if (res.data.success) {
+        setStats({ ...emptyStats, ...res.data.stats });
+        setLastUpdated(new Date());
+      }
+    } catch (error) {
+      if (!silent) toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (adminToken) {
-      fetchStats();
-      const interval = setInterval(fetchStats, 60000); 
-      return () => clearInterval(interval);
-    }
+    if (!adminToken) return;
+
+    fetchStats();
+    const interval = setInterval(() => fetchStats({ silent: true }), 15000);
+    return () => clearInterval(interval);
   }, [adminToken, url]);
+
+  const statusItems = useMemo(() => {
+    const breakdown = stats.statusBreakdown || {};
+    return [
+      { label: "Order Placed", value: breakdown["Order Placed"] || 0, color: "#f59e0b" },
+      { label: "Food Processing", value: breakdown["Food Processing"] || 0, color: "#3b82f6" },
+      { label: "Out for Delivery", value: breakdown["Out for Delivery"] || 0, color: "#8b5cf6" },
+      { label: "Delivered", value: breakdown.Delivered || 0, color: "#10b981" },
+      { label: "Cancelled", value: breakdown.Cancelled || 0, color: "#ef4444" },
+    ];
+  }, [stats.statusBreakdown]);
+
+  const maxTrend = Math.max(...(stats.weeklyTrend || []).map((day) => day.orders), 1);
+  const paidRate = percent(stats.paidOrders, stats.totalOrders);
+  const deliveredRate = percent(stats.deliveredOrders, stats.totalOrders);
 
   if (loading) {
     return (
-      <div className="dashboard-skeleton-container">
-        <div className="skeleton-hero">
-           <div className="skeleton skeleton-circle" style={{ width: 60, height: 60 }}></div>
-           <div className="skeleton skeleton-title" style={{ width: 200 }}></div>
-        </div>
-        <div className="skeleton-grid">
-           <div className="skeleton-card skeleton" style={{ height: 200 }}></div>
-           <div className="skeleton-card skeleton" style={{ height: 200 }}></div>
-           <div className="skeleton-card skeleton" style={{ height: 200 }}></div>
-           <div className="skeleton-card skeleton" style={{ height: 300, gridColumn: 'span 2' }}></div>
-           <div className="skeleton-card skeleton" style={{ height: 300 }}></div>
-        </div>
+      <div className="dashboard-loading">
+        <div className="loading-ring" />
+        <p>Loading live dashboard...</p>
       </div>
     );
   }
 
-  const today = new Date();
-  const dateNum = today.getDate();
-  const dayName = today.toLocaleDateString('en-US', { weekday: 'short' });
-  const monthName = today.toLocaleDateString('en-US', { month: 'long' });
-
-  // Calculate percentages for the concentric circles
-  const total = stats.totalOrders || 1;
-  const pPending = Math.round((stats.pendingOrders / total) * 100);
-  const pDelivered = Math.round((stats.deliveredOrders / total) * 100);
-
   return (
-    <div className="dash-premium-wrapper">
-      {/* TOP NAVBAR */}
-      <div className="dash-navbar">
-        <div className="nav-left">
-          <div className="nav-logo-box">UF</div>
-          <div className="nav-title">
-            <strong>Urban Foods</strong>
-            <span>Dashboard</span>
-          </div>
+    <div className="dashboard-page">
+      <header className="dashboard-header">
+        <div>
+          <span className="eyebrow">Live Operations</span>
+          <h1>Admin Dashboard</h1>
+          <p>Real-time order, payment, menu, and customer metrics from Urban Foods.</p>
         </div>
-
-        <div className="nav-center">
-          <div className="nav-profile">
-            <div className="avatar">A</div>
-            <div className="profile-text">
-              <strong>Admin User</strong>
-              <span>System Manager</span>
-            </div>
+        <div className="header-actions">
+          <div className="live-chip">
+            <span className="live-dot" />
+            Updated {lastUpdated ? lastUpdated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "now"}
           </div>
-        </div>
-
-        <div className="nav-right">
-          <div className="nav-search">
-            <Search size={18} />
-            <input type="text" placeholder="Start searching here..." />
-          </div>
-        </div>
-      </div>
-
-      {/* HERO SECTION */}
-      <div className="dash-hero">
-        <div className="hero-left">
-          <div className="date-pill">
-            <h2>{dateNum}</h2>
-            <div className="date-text">
-              <strong>{dayName},</strong>
-              <span>{monthName}</span>
-            </div>
-          </div>
-          <button className="btn-tasks">
-            Show my Tasks <ArrowRight size={16} />
+          <button className="refresh-btn" onClick={() => fetchStats()} type="button">
+            <RefreshCw size={16} />
+            Refresh
           </button>
-          <div className="icon-btn-circular"><Calendar size={18} /></div>
+        </div>
+      </header>
+
+      <section className="metric-grid">
+        <MetricCard icon={Wallet} label="Today Revenue" value={money(stats.dailyRevenue)} tone="revenue" />
+        <MetricCard icon={TrendingUp} label="Month Revenue" value={money(stats.monthlyRevenue)} tone="growth" />
+        <MetricCard icon={Package} label="Total Orders" value={number(stats.totalOrders)} tone="orders" />
+        <MetricCard icon={CreditCard} label="Paid Orders" value={`${paidRate}%`} helper={`${number(stats.paidOrders)} paid`} tone="paid" />
+        <MetricCard icon={Users} label="Customers" value={number(stats.totalCustomers)} tone="customers" />
+        <MetricCard icon={Utensils} label="Menu Items" value={number(stats.totalMenuItems)} tone="menu" />
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="dashboard-card wide">
+          <div className="card-title-row">
+            <div>
+              <h2>7-Day Order Trend</h2>
+              <p>Orders and paid revenue by day.</p>
+            </div>
+            <div className="summary-pill">{money(stats.totalRevenue)} total paid revenue</div>
+          </div>
+          <div className="trend-chart">
+            {(stats.weeklyTrend || []).map((day) => (
+              <div className="trend-day" key={day.date}>
+                <div className="bar-wrap">
+                  <div
+                    className="trend-bar"
+                    style={{ height: `${Math.max((day.orders / maxTrend) * 100, day.orders ? 12 : 4)}%` }}
+                    title={`${day.orders} orders, ${money(day.revenue)}`}
+                  />
+                </div>
+                <strong>{day.orders}</strong>
+                <span>{day.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="hero-right">
-          <div className="greeting">
-            <h2>Hey, Need help? 👋</h2>
-            <p>Just ask me anything!</p>
+        <div className="dashboard-card">
+          <div className="card-title-row compact">
+            <div>
+              <h2>Fulfillment</h2>
+              <p>{deliveredRate}% delivered</p>
+            </div>
+            <Truck size={20} />
           </div>
-          <button className="btn-mic"><Mic size={20} /></button>
+          <div className="status-list">
+            {statusItems.map((item) => (
+              <div className="status-row" key={item.label}>
+                <div className="status-row-top">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+                <div className="status-track">
+                  <span
+                    style={{
+                      width: `${Math.max(percent(item.value, stats.totalOrders), item.value ? 5 : 0)}%`,
+                      background: item.color,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* MAIN GRID */}
-      <div className="dash-grid">
-        
-        {/* COLUMN 1 */}
-        <div className="grid-col col-1">
-          {/* Revenue Card (VISA Style) */}
-          <div className="premium-card revenue-card">
-            <div className="rev-header">
-              <strong>URBAN FOODS</strong>
-              <div className="rev-dropdown">Live Data <ChevronDown size={14} /></div>
+        <div className="dashboard-card">
+          <div className="card-title-row compact">
+            <div>
+              <h2>Payment Health</h2>
+              <p>Current M-Pesa/order payment state.</p>
             </div>
-            <div className="rev-body">
-              <span>Today's Revenue</span>
-              <h3>KSh {stats.dailyRevenue.toLocaleString()}</h3>
+            <CreditCard size={20} />
+          </div>
+          <div className="payment-health">
+            <div className="payment-circle" style={{ "--paid": `${paidRate}%` }}>
+              <span>{paidRate}%</span>
+              <small>paid</small>
             </div>
-            <div className="rev-actions">
-              <button className="btn-dark">Receive</button>
-              <button className="btn-light">Send</button>
-            </div>
-            <div className="rev-footer">
-              <div className="fee">
-                <span>Monthly target</span>
-                <strong>KSh 50,000</strong>
-              </div>
-              <div className="edit-limit">
-                <Settings size={14} /> Edit limitations
-              </div>
+            <div className="payment-breakdown">
+              <HealthLine label="Paid" value={stats.paidOrders} icon={CheckCircle} />
+              <HealthLine label="Pending" value={stats.pendingPaymentOrders} icon={Clock} />
+              <HealthLine label="Failed" value={stats.failedPaymentOrders} icon={AlertCircle} />
             </div>
           </div>
+        </div>
 
-          {/* Annual Profits -> Order Distribution */}
-          <div className="premium-card chart-card">
-            <div className="chart-header">
-              <strong>Order Distribution</strong>
-              <div className="rev-dropdown">Today <ChevronDown size={14} /></div>
+        <div className="dashboard-card">
+          <div className="card-title-row compact">
+            <div>
+              <h2>Top Items</h2>
+              <p>Best sellers by quantity.</p>
             </div>
-            
-            <div className="concentric-chart">
-              <div className="circle circle-1">
-                <div className="circle circle-2">
-                  <div className="circle circle-3">
-                    <span className="chart-val">{stats.totalOrders}</span>
+            <ShoppingBag size={20} />
+          </div>
+          <div className="top-items">
+            {(stats.topItems || []).length ? (
+              stats.topItems.map((item, index) => (
+                <div className="top-item" key={item._id || index}>
+                  <span className="rank">{index + 1}</span>
+                  <div>
+                    <strong>{item._id || "Unnamed item"}</strong>
+                    <small>{number(item.quantity)} sold</small>
                   </div>
-                  <span className="chart-val-top">{stats.deliveredOrders} D</span>
+                  <span>{money(item.revenue)}</span>
                 </div>
-                <span className="chart-val-top">{stats.pendingOrders} P</span>
-              </div>
-            </div>
+              ))
+            ) : (
+              <p className="empty-state">No item sales yet.</p>
+            )}
           </div>
         </div>
 
-        {/* COLUMN 2 */}
-        <div className="grid-col col-2">
-          {/* Top small stats */}
-          <div className="small-stats-group">
-            <div className="premium-card small-stat">
-              <div className="stat-icon-top"><Activity size={16}/></div>
-              <div className="rev-dropdown">Weekly <ChevronDown size={14} /></div>
-              <div className="stat-info">
-                <span>Total Orders</span>
-                <h3>{stats.totalOrders}</h3>
-              </div>
+        <div className="dashboard-card">
+          <div className="card-title-row compact">
+            <div>
+              <h2>Recent Orders</h2>
+              <p>Latest customer activity.</p>
             </div>
-            
-            <div className="premium-card small-stat">
-              <div className="stat-icon-top"><CheckCircle size={16}/></div>
-              <div className="rev-dropdown">Weekly <ChevronDown size={14} /></div>
-              <div className="stat-info">
-                <span>Delivered</span>
-                <h3 className="text-danger">{stats.deliveredOrders}</h3>
-              </div>
-              <div className="view-chart-link"><Zap size={12}/> View on chart mode</div>
-            </div>
+            <Activity size={20} />
           </div>
-
-          {/* Activity Manager */}
-          <div className="premium-card activity-manager">
-            <div className="am-header">
-              <strong>Activity manager</strong>
-              <div className="am-filters">
-                <span className="filter-pill">Team <span className="dot red"></span></span>
-                <span className="filter-pill">Insights <span className="dot gray"></span></span>
-                <span className="filter-pill">Today <X size={12}/></span>
-              </div>
-            </div>
-            
-            <div className="am-search">
-              <Search size={14} />
-              <input type="text" placeholder="Search in activities..." />
-            </div>
-
-            <div className="am-content">
-              <div className="am-main-stat">
-                <h3>{stats.pendingOrders} <span>PENDING</span></h3>
-                
-                {/* CSS Bar Chart */}
-                <div className="css-bar-chart">
-                  {/* Map real order counts over the last week if available, otherwise use stats */}
-                  {[30, 50, stats.totalOrders > 0 ? 100 : 20, 60, 40, stats.deliveredOrders > 0 ? 80 : 30, 90].map((h, i) => (
-                    <div key={i} title={`${h} orders`} className={`bar ${i === 6 ? 'active' : ''}`} style={{ height: `${Math.min(h, 100)}%` }}></div>
-                  ))}
+          <div className="recent-orders">
+            {(stats.recentOrders || []).length ? (
+              stats.recentOrders.map((order) => (
+                <div className="recent-order" key={order._id}>
+                  <div>
+                    <strong>#{order.orderId || String(order._id).slice(-6)}</strong>
+                    <span>{order.address?.firstName || "Customer"} · {order.status}</span>
+                  </div>
+                  <div className={order.payment ? "pay-state paid" : "pay-state pending"}>
+                    {order.payment ? "Paid" : order.paymentStatus || "Pending"}
+                  </div>
                 </div>
-                <div className="chart-dots">
-                  <span className="dot gray"></span><span className="dot red"></span><span className="dot gray"></span>
-                </div>
-              </div>
-
-              <div className="am-plans">
-                <div className="plan-header">
-                  <strong>System Health</strong>
-                  <ChevronDown size={14}/>
-                </div>
-                <ul className="plan-list">
-                  <li><span className="dot red"></span> DB: {stats.systemHealth.dbStatus}</li>
-                  <li><span className="dot red"></span> API: {stats.systemHealth.apiStatus}</li>
-                  <li><span className="dot red"></span> Load: {stats.systemHealth.serverLoad}%</li>
-                </ul>
-              </div>
-
-              <div className="am-recent-list">
-                <strong>Recent Events</strong>
-                <div className="activity-stack">
-                  {stats.recentActivity && stats.recentActivity.length > 0 ? (
-                    stats.recentActivity.map((log) => (
-                      <div key={log._id} className="activity-item-mini">
-                        <div className={`status-dot ${log.status === 'success' ? 'bg-success' : 'bg-danger'}`}></div>
-                        <div className="activity-text">
-                          <span className="action">{log.action.replace(/_/g, ' ')}</span>
-                          <span className="time">{new Date(log.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="no-data">No recent activity</p>
-                  )}
-                </div>
-              </div>
-            </div>
+              ))
+            ) : (
+              <p className="empty-state">No recent orders.</p>
+            )}
           </div>
         </div>
 
-        {/* COLUMN 3 */}
-        <div className="grid-col col-3">
-          
-          <div className="side-stats-group">
-            <div className="premium-card lock-card">
-              <Lock size={20} />
-              <span>System Lock</span>
+        <div className="dashboard-card">
+          <div className="card-title-row compact">
+            <div>
+              <h2>System & Audit</h2>
+              <p>Connectivity and recent audit events.</p>
             </div>
-            
-            <div className="premium-card uptime-card">
-              <Activity size={16} />
-              <div className="uptime-info">
-                <strong>99.9%</strong>
-                <span>Uptime SLA</span>
-              </div>
-              <div className="dot-grid">
-                {[...Array(24)].map((_, i) => <div key={i} className={`mini-dot ${i > 20 ? 'gray' : 'red'}`}></div>)}
-              </div>
-            </div>
-
-            <div className="premium-card growth-card">
-              <div className="circular-progress">
-                <span>{pDelivered}%</span>
-                <small>Delivered</small>
-              </div>
-            </div>
+            <Activity size={20} />
           </div>
-
-          <div className="premium-card stocks-card">
-            <div className="stocks-header">
-              <Activity size={16} />
-              <h3>{stats.totalOrders * 12}</h3>
-            </div>
-            <div className="sparkline">
-               <svg viewBox="0 0 100 20" className="sparkline-svg">
-                 <path d="M0,10 Q5,5 10,15 T20,10 T30,18 T40,5 T50,15 T60,8 T70,12 T80,2 T90,16 T100,5" fill="none" stroke="#FF6B6B" strokeWidth="1.5" />
-               </svg>
-            </div>
-            <div className="stocks-footer">
-              <div>
-                <strong>Platform Usage</strong>
-                <span>Extended & Limited</span>
+          <div className="system-lines">
+            <HealthLine label="Database" value={stats.systemHealth.dbStatus} icon={CheckCircle} />
+            <HealthLine label="API" value={stats.systemHealth.apiStatus} icon={CheckCircle} />
+            <HealthLine label="Load" value={stats.systemHealth.serverLoad} icon={Activity} />
+          </div>
+          <div className="audit-list">
+            {(stats.recentActivity || []).slice(0, 4).map((log) => (
+              <div className="audit-item" key={log._id}>
+                <span className={log.status === "success" ? "audit-dot success" : "audit-dot danger"} />
+                <div>
+                  <strong>{String(log.action || "").replace(/_/g, " ")}</strong>
+                  <small>{new Date(log.createdAt).toLocaleString()}</small>
+                </div>
               </div>
-              <span className="growth-badge">+ 9.3%</span>
-            </div>
+            ))}
           </div>
-
-          <div className="premium-card review-card">
-            <div className="review-dots"><span/><span/><span/></div>
-            <button className="close-btn"><X size={14}/></button>
-            <span>Review rating</span>
-            <h3>How is your business management going?</h3>
-            <div className="rating-faces">
-              <div className="face"><div className="mouth sad"></div></div>
-              <div className="face"><div className="mouth neutral"></div></div>
-              <div className="face"><div className="mouth happy"></div></div>
-              <div className="face active"><div className="mouth very-happy"></div></div>
-            </div>
-          </div>
-
         </div>
-
-      </div>
+      </section>
     </div>
   );
 };
+
+const MetricCard = ({ icon: Icon, label, value, helper, tone }) => (
+  <div className={`metric-card ${tone}`}>
+    <div className="metric-icon">
+      <Icon size={20} />
+    </div>
+    <span>{label}</span>
+    <strong>{value}</strong>
+    {helper && <small>{helper}</small>}
+  </div>
+);
+
+const HealthLine = ({ icon: Icon, label, value }) => (
+  <div className="health-line">
+    <Icon size={15} />
+    <span>{label}</span>
+    <strong>{value}</strong>
+  </div>
+);
 
 export default Dashboard;

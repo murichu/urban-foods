@@ -10,10 +10,34 @@ const getMpesaBaseUrl = () => {
     : "https://sandbox.safaricom.co.ke";
 };
 
+const summarizeExternalError = (error) => {
+  const status = error.response?.status;
+  const contentType = error.response?.headers?.["content-type"];
+  const data = error.response?.data;
+
+  if (data && typeof data === "object") {
+    return { status, data };
+  }
+
+  if (typeof data === "string") {
+    return {
+      status,
+      contentType,
+      body: data.replace(/\s+/g, " ").trim().slice(0, 300),
+    };
+  }
+
+  return { status, message: error.message };
+};
+
+const logExternalError = (message, error) => {
+  logger.error(`${message}: ${JSON.stringify(summarizeExternalError(error))}`);
+};
+
 /**
  * Generate M-Pesa access token
  */
-export const getAccessToken = async () => {
+export const getAccessToken = async ({ logErrors = true } = {}) => {
   const baseUrl = getMpesaBaseUrl();
   const apiUrl = `${baseUrl}/oauth/v1/generate?grant_type=client_credentials`;
   const headers = {
@@ -23,17 +47,20 @@ export const getAccessToken = async () => {
         `${process.env.MPESA_CONSUMER_KEY}:${process.env.MPESA_CONSUMER_SECRET}`
       ).toString("base64"),
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
 
   try {
     const response = await axios.get(apiUrl, { headers });
     return response.data.access_token;
   } catch (error) {
-    logger.error(
-      "Error getting M-Pesa access token:",
-      error.response?.data || error.message
-    );
-    throw new Error("Error getting access token");
+    if (logErrors) {
+      logExternalError("Error getting M-Pesa access token", error);
+    }
+
+    const tokenError = new Error("Error getting access token");
+    tokenError.status = error.response?.status;
+    throw tokenError;
   }
 };
 
@@ -100,6 +127,7 @@ export const initiateMpesaStkPush = async (
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
       }
     );
@@ -110,16 +138,14 @@ export const initiateMpesaStkPush = async (
         $set: {
           paymentId: generateCustomId("STK"), // New Payment ID for this initiation
           mpesaCheckoutRequestId: response.data.CheckoutRequestID,
+          mpesaMerchantRequestId: response.data.MerchantRequestID,
         },
       });
     }
 
     return response.data;
   } catch (error) {
-    logger.error(
-      "Error initiating M-Pesa STK Push:",
-      error.response?.data || error.message
-    );
+    logExternalError("Error initiating M-Pesa STK Push", error);
     throw error;
   }
 };
@@ -136,21 +162,44 @@ export const processMpesaCallback = async (stkCallback) => {
     CallbackMetadata,
   } = stkCallback;
 
-  // Find order by mpesaCheckoutRequestId
-  const order = await orderModel.findOne({
-    mpesaCheckoutRequestId: CheckoutRequestID,
-  });
-
-  if (!order) {
-    logger.error(
-      `CRITICAL: Order not found for M-Pesa CheckoutRequestID: ${CheckoutRequestID}`
+  const existingPayment = await paymentModel.findOne({ CheckoutRequestID });
+  if (existingPayment) {
+    logger.info(
+      `Duplicate M-Pesa callback ignored for CheckoutRequestID: ${CheckoutRequestID}`
     );
-    throw new Error("Order not found");
+    return {
+      success: existingPayment.status === "completed",
+      duplicate: true,
+      payment: existingPayment,
+      message: ResultDesc,
+    };
   }
 
-  if (ResultCode === 0) {
+  // Find order by Safaricom request IDs saved during STK initiation.
+  const orderMatch = [
+    CheckoutRequestID ? { mpesaCheckoutRequestId: CheckoutRequestID } : null,
+    MerchantRequestID ? { mpesaMerchantRequestId: MerchantRequestID } : null,
+  ].filter(Boolean);
+
+  const order = orderMatch.length
+    ? await orderModel.findOne({ $or: orderMatch })
+    : null;
+
+  if (!order) {
+    logger.warn(
+      `M-Pesa callback received for missing order. CheckoutRequestID: ${CheckoutRequestID}, ResultCode: ${ResultCode}, ResultDesc: ${ResultDesc}`
+    );
+    return {
+      success: false,
+      missingOrder: true,
+      message: "Order not found for callback",
+    };
+  }
+
+  if (Number(ResultCode) === 0) {
     order.paymentStatus = "Paid";
     order.payment = true;
+    order.mpesaFailedAttempts = 0;
     await order.save();
 
     const items = CallbackMetadata?.Item || [];
@@ -181,10 +230,13 @@ export const processMpesaCallback = async (stkCallback) => {
     );
     return { success: true, order };
   } else {
+    order.mpesaFailedAttempts = (order.mpesaFailedAttempts || 0) + 1;
     order.paymentStatus = "Failed";
+    order.payment = false;
     await order.save();
+
     logger.warn(
-      `Payment FAILED for Order: ${order.orderId} (ID: ${order._id}): ${ResultDesc}`
+      `Payment FAILED for Order: ${order.orderId} (ID: ${order._id}), attempt ${order.mpesaFailedAttempts}/3: ${ResultDesc}`
     );
 
     // Log failed payment attempt
@@ -202,6 +254,13 @@ export const processMpesaCallback = async (stkCallback) => {
     });
     await payment.save();
 
+    if (order.mpesaFailedAttempts >= 3) {
+      await orderModel.findByIdAndDelete(order._id);
+      logger.warn(
+        `Deleted Order: ${order.orderId} (ID: ${order._id}) after 3 failed M-Pesa attempts`
+      );
+    }
+
     return { success: false, order, message: ResultDesc };
   }
 };
@@ -210,17 +269,17 @@ export const processMpesaCallback = async (stkCallback) => {
  * Query M-Pesa STK Push status
  */
 export const queryStkPushStatus = async (checkoutRequestID) => {
-  const accessToken = await getAccessToken();
-  const shortCode = process.env.MPESA_SHORTCODE || "174379";
-  const passkey =
-    process.env.MPESA_PASSKEY ||
-    "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
-  const timestamp = generateTimestamp();
-  const password = Buffer.from(shortCode + passkey + timestamp).toString(
-    "base64"
-  );
-
   try {
+    const accessToken = await getAccessToken({ logErrors: false });
+    const shortCode = process.env.MPESA_SHORTCODE || "174379";
+    const passkey =
+      process.env.MPESA_PASSKEY ||
+      "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919";
+    const timestamp = generateTimestamp();
+    const password = Buffer.from(shortCode + passkey + timestamp).toString(
+      "base64"
+    );
+
     const baseUrl = getMpesaBaseUrl();
     const response = await axios.post(
       `${baseUrl}/mpesa/stkpushquery/v1/query`,
@@ -234,15 +293,17 @@ export const queryStkPushStatus = async (checkoutRequestID) => {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
       }
     );
     return response.data;
   } catch (error) {
-    logger.error(
-      "Error querying STK status:",
-      error.response?.data || error.message
-    );
+    const status = error.status || error.response?.status;
+
+    if (!status || (status !== 403 && status !== 429 && status < 500)) {
+      logExternalError("Error querying STK status", error);
+    }
     throw error;
   }
 };

@@ -3,7 +3,7 @@ import {
   Settings as SettingsIcon, Bell, Shield, 
   Palette, Globe, Save, RefreshCw,
   Lock, Mail, Building2,
-  Link as LinkIcon
+  Link as LinkIcon, Truck
 } from 'lucide-react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -31,6 +31,7 @@ const Settings = () => {
     businessVat: '',
     invoicePrefix: '',
     currency: 'KSh',
+    deliveryFee: 0,
     socialLinks: {
       facebook: '',
       instagram: '',
@@ -42,7 +43,15 @@ const Settings = () => {
     try {
       const response = await axios.get(`${url}/api/settings/get`, { headers: { token } });
       if (response.data.success && response.data.data) {
-        setFormData(response.data.data);
+        setFormData(prev => ({
+          ...prev,
+          ...response.data.data,
+          deliveryFee: response.data.data.deliveryFee ?? 0,
+          socialLinks: {
+            ...prev.socialLinks,
+            ...(response.data.data.socialLinks || {})
+          }
+        }));
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
@@ -219,6 +228,24 @@ const Settings = () => {
                         <option value="$">$ (USD)</option>
                         <option value="€">€ (Euro)</option>
                       </select>
+                    </div>
+                    <div className="form-group">
+                      <label>
+                        <Truck size={14} />
+                        Delivery Fee
+                      </label>
+                      <div className="input-with-prefix">
+                        <span>KSh</span>
+                        <input
+                          type="number"
+                          name="deliveryFee"
+                          min="0"
+                          step="1"
+                          value={formData.deliveryFee}
+                          onChange={handleChange}
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>

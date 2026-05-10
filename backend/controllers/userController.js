@@ -222,7 +222,8 @@ const adminLogin = async (req, res) => {
  */
 const getUserProfile = async (req, res) => {
   try {
-    const user = await userModel.findById(req.body.userId).select('-password');
+    const userId = req.userId || req.body.userId;
+    const user = await userModel.findById(userId).select('-password');
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -239,10 +240,11 @@ const getUserProfile = async (req, res) => {
 const updateUserProfile = async (req, res) => {
   const { name, phone, address } = req.body;
   try {
+    const userId = req.userId || req.body.userId;
     const user = await userModel.findByIdAndUpdate(
-      req.body.userId,
+      userId,
       { name, phone, address },
-      { new: true, runValidators: true }
+      { returnDocument: "after", runValidators: true }
     ).select('-password');
 
     if (!user) {

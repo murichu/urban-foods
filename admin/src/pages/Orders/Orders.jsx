@@ -62,6 +62,8 @@ const ORDER_STATUSES = [
   "Cancelled"
 ];
 
+const isOrderPaid = (order) => order?.payment || order?.paymentStatus === "Paid";
+
 const Orders = ({ url }) => {
   const token = localStorage.getItem("adminToken");
 
@@ -132,30 +134,31 @@ const Orders = ({ url }) => {
   const handleStatusChange = async (id, status) => {
     const order = orders.find(o => o._id === id);
     
-    // Validation: Cannot mark as Delivered if not paid
-    if (status === "Delivered" && !order.payment) {
-      toast.error("Cannot mark as Delivered: Payment not received");
+    const requiresPayment = ["Food Processing", "Out for Delivery", "Delivered"].includes(status);
+    if (requiresPayment && !isOrderPaid(order)) {
+      toast.error(`Cannot mark as ${status}: Payment not received`);
       return;
     }
 
     try {
-      await axios.patch(
+      const { data } = await axios.patch(
         `${url}/api/order/status`,
         { orderId: id, status },
         { headers: { token } }
       );
 
+      const updatedOrder = data.data || { ...order, status };
       setOrders(prev =>
-        prev.map(o => (o._id === id ? { ...o, status } : o))
+        prev.map(o => (o._id === id ? { ...o, ...updatedOrder } : o))
       );
       
       if (selectedOrder && selectedOrder._id === id) {
-        setSelectedOrder(prev => ({...prev, status}));
+        setSelectedOrder(prev => ({...prev, ...updatedOrder}));
       }
 
       toast.success(`Status updated to ${status}`);
-    } catch {
-      toast.error("Update failed");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Update failed");
     }
   };
 
@@ -386,8 +389,8 @@ const Orders = ({ url }) => {
                     </td>
 
                     <td>
-                       <div className={`payment-status-pill ${o.payment ? 'paid' : 'unpaid'}`}>
-                         {o.payment ? 'Paid' : 'Pending'}
+                       <div className={`payment-status-pill ${isOrderPaid(o) ? 'paid' : 'unpaid'}`}>
+                         {isOrderPaid(o) ? 'Paid' : 'Pending'}
                        </div>
                     </td>
 
@@ -488,8 +491,8 @@ const Orders = ({ url }) => {
             <div className="modal-glass-header">
               <div className="header-top">
                 <div className="header-badge">#{selectedOrder._id.slice(-6)}</div>
-                <div className={`payment-badge ${selectedOrder.payment ? 'paid' : 'unpaid'}`}>
-                  {selectedOrder.payment ? 'PAYMENT RECEIVED' : 'PAYMENT PENDING'}
+                <div className={`payment-badge ${isOrderPaid(selectedOrder) ? 'paid' : 'unpaid'}`}>
+                  {isOrderPaid(selectedOrder) ? 'PAYMENT RECEIVED' : 'PAYMENT PENDING'}
                 </div>
                 <button className="close-btn-round" onClick={() => setSelectedOrder(null)}>
                    <X size={20} />
@@ -593,7 +596,6 @@ const Orders = ({ url }) => {
                    value={selectedOrder.status} 
                    onChange={(e) => {
                      handleStatusChange(selectedOrder._id, e.target.value);
-                     setSelectedOrder({...selectedOrder, status: e.target.value});
                    }}
                    className={`status-select ${selectedOrder.status.toLowerCase().replace(/\s+/g, '-')}`}
                  >
@@ -602,7 +604,7 @@ const Orders = ({ url }) => {
                </div>
 
                <div className="footer-actions">
-                 {selectedOrder.status === 'Out for Delivery' && (selectedOrder.paymentStatus === 'Pending' || !selectedOrder.payment) && (
+                 {selectedOrder.status === 'Out for Delivery' && !isOrderPaid(selectedOrder) && (
                     <Button variant="outline" className="pay-now-btn" onClick={handlePayNow} disabled={loading}>
                       <CreditCard size={16} /> Pay Now
                     </Button>

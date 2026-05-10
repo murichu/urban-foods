@@ -53,7 +53,22 @@ const descriptions = {
 
 const seedDatabase = async () => {
   try {
-    await mongoose.connect(process.env.MONGOOSE_DB);
+    const mongoUri =
+      process.env.MONGOOSE_DB ||
+      (process.env.MONGODB_URL && process.env.MONGODB_NAME
+        ? `${process.env.MONGODB_URL}/${process.env.MONGODB_NAME}`
+        : undefined) ||
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI ||
+      process.env.DATABASE_URL;
+
+    if (!mongoUri) {
+      throw new Error(
+        "Missing MongoDB connection string. Set MONGOOSE_DB or MONGODB_URL and MONGODB_NAME in backend/.env."
+      );
+    }
+
+    await mongoose.connect(mongoUri);
     console.log('Connected to MongoDB');
 
     // Clear existing food items

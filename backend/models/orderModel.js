@@ -17,8 +17,11 @@ const orderSchema = new mongoose.Schema(
       enum: ["Pending", "Success", "Failed", "Paid"],
     },
     payment: { type: Boolean, default: false },
+    mpesaFailedAttempts: { type: Number, default: 0 },
     orderId: { type: String, unique: true },
     paymentId: { type: String, unique: true },
+    mpesaCheckoutRequestId: { type: String, index: true, sparse: true },
+    mpesaMerchantRequestId: { type: String, index: true, sparse: true },
     trackingId: { type: String, unique: true },
   },
   { timestamps: true }

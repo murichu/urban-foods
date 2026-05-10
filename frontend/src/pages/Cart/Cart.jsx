@@ -1,7 +1,8 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import "./Cart.css";
 import { StoreContext } from "../../Context/StoreContext";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 import {
   Trash2, ShoppingBag, ArrowRight, Ticket,
   Plus, Minus, CreditCard, Truck, Clock,
@@ -25,9 +26,27 @@ const Cart = () => {
   const [promoApplied, setPromoApplied] = useState(false);
   const [promoError, setPromoError] = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
+  const [backendDeliveryFee, setBackendDeliveryFee] = useState(0);
+
+  useEffect(() => {
+    const fetchBusinessSettings = async () => {
+      try {
+        const response = await axios.get(`${url}/api/settings/get`);
+        if (response.data.success) {
+          setBackendDeliveryFee(Number(response.data.data?.deliveryFee) || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching business settings:", error);
+      }
+    };
+
+    if (url) {
+      fetchBusinessSettings();
+    }
+  }, [url]);
 
   const totalAmount = getTotalCartAmount();
-  const deliveryFee = totalAmount === 0 ? 0 : 200;
+  const deliveryFee = totalAmount === 0 ? 0 : backendDeliveryFee;
   const discountAmount = promoApplied ? totalAmount * 0.1 : promoDiscount;
   const finalAmount = totalAmount + deliveryFee - discountAmount;
 

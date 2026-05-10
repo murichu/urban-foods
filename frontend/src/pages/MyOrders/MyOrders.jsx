@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from "react";
 import "./MyOrders.css";
 import { StoreContext } from "../../Context/StoreContext";
 import axios from "axios";
+
 import {
   Package,
   PackageOpen,
@@ -20,31 +21,63 @@ import {
   ChevronDown,
   MapPin,
   CreditCard,
-  TrendingUp
 } from "lucide-react";
+
 import { useNavigate } from "react-router-dom";
 
 const MyOrders = () => {
   const { url, token } = useContext(StoreContext);
+
   const navigate = useNavigate();
+
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
   const [showFilters, setShowFilters] = useState(false);
+
   const [expandedOrder, setExpandedOrder] = useState(null);
 
+  // Backend delivery fee
+  const [backendDeliveryFee, setBackendDeliveryFee] = useState(0);
+
+  // Fetch business settings
+  useEffect(() => {
+    const fetchBusinessSettings = async () => {
+      try {
+        const response = await axios.get(`${url}/api/settings/get`);
+
+        if (response.data.success) {
+          setBackendDeliveryFee(Number(response.data.data?.deliveryFee) || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching business settings:", error);
+      }
+    };
+
+    if (url) {
+      fetchBusinessSettings();
+    }
+  }, [url]);
+
+  // Fetch orders
   const fetchOrders = async () => {
     try {
       const response = await axios.post(
-        url + "/api/order/user-orders",
+        `${url}/api/order/user-orders`,
         {},
         {
-          headers: { token }
+          headers: { token },
         }
       );
-      const ordersData = Array.isArray(response.data.data) ? response.data.data : [];
+
+      const ordersData = Array.isArray(response.data.data)
+        ? response.data.data
+        : [];
+
       setOrders(ordersData);
       setFilteredOrders(ordersData);
     } catch (error) {
@@ -60,6 +93,7 @@ const MyOrders = () => {
     }
   }, [token]);
 
+  // Filter orders
   useEffect(() => {
     filterOrders();
   }, [searchTerm, statusFilter, orders]);
@@ -68,82 +102,147 @@ const MyOrders = () => {
     let filtered = [...orders];
 
     if (searchTerm) {
-      filtered = filtered.filter(order =>
-        order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.items?.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+      filtered = filtered.filter(
+        (order) =>
+          order._id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          order.items?.some((item) =>
+            item.name.toLowerCase().includes(searchTerm.toLowerCase())
+          )
       );
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(order =>
-        order.status?.toLowerCase() === statusFilter.toLowerCase()
+      filtered = filtered.filter(
+        (order) =>
+          getDisplayStatus(order).toLowerCase() === statusFilter.toLowerCase()
       );
     }
 
     setFilteredOrders(filtered);
   };
 
-  const getStatusConfig = (status) => {
-    const configs = {
-      "delivered": {
-        class: "delivered",
-        icon: <CheckCircle size={14} />,
-        label: "Delivered"
-      },
-      "food processing": {
-        class: "processing",
-        icon: <Zap size={14} />,
-        label: "Processing"
-      },
-      "out for delivery": {
-        class: "shipping",
-        icon: <Truck size={14} />,
-        label: "Out for Delivery"
-      },
-      "pending": {
-        class: "pending",
-        icon: <Clock size={14} />,
-        label: "Pending"
-      },
-      "cancelled": {
-        class: "cancelled",
-        icon: <X size={14} />,
-        label: "Cancelled"
-      }
-    };
-    return configs[status?.toLowerCase()] || configs["pending"];
+  // Payment status
+  const isOrderPaid = (order) =>
+    order.payment || order.paymentStatus === "Paid";
+
+  // Display status
+  const getDisplayStatus = (order) => {
+    if (!isOrderPaid(order) && order.paymentStatus !== "Paid") {
+      return "Payment Pending";
+    }
+
+    return order.status || "Order Placed";
   };
 
+  // Status styles
+  const getStatusConfig = (status) => {
+    const configs = {
+      "order placed": {
+        class: "pending",
+        icon: <Package size={10} />,
+        label: "Order Placed",
+      },
+
+      delivered: {
+        class: "delivered",
+        icon: <CheckCircle size={10} />,
+        label: "Delivered",
+      },
+
+      "food processing": {
+        class: "processing",
+        icon: <Zap size={10} />,
+        label: "Processing",
+      },
+
+      "out for delivery": {
+        class: "shipping",
+        icon: <Truck size={10} />,
+        label: "Out for Delivery",
+      },
+
+      pending: {
+        class: "pending",
+        icon: <Clock size={10} />,
+        label: "Pending",
+      },
+
+      "payment pending": {
+        class: "pending",
+        icon: <CreditCard size={10} />,
+        label: "Payment Pending",
+      },
+
+      cancelled: {
+        class: "cancelled",
+        icon: <X size={10} />,
+        label: "Cancelled",
+      },
+    };
+
+    return configs[status?.toLowerCase()] || configs["order placed"];
+  };
+
+  // Format date
   const formatDate = (date) => {
     const d = new Date(date);
     const now = new Date();
-    const diffTime = Math.abs(now - d);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // Reset time to compare only dates
+    const orderDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+    const currentDate = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
+    const diffTime = currentDate - orderDate;
+
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) return "Today";
-    if (diffDays === 1) return "Yesterday";
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  };
 
+    if (diffDays === 1) return "Yesterday";
+
+    if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    }
+
+    return d.toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
+  // Toggle expanded order
   const toggleExpand = (orderId) => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
 
+  // Clear filters
   const clearFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
   };
 
+  // Calculate total
+  const calculateOrderTotal = (amount) => {
+    return amount + backendDeliveryFee;
+  };
+
+  // Loading state
   if (loading) {
     return (
       <div className="my-orders-loading">
         <div className="loading-spinner"></div>
+
         <p>Loading your orders...</p>
       </div>
     );
   }
 
+  // Empty state
   if (!orders.length) {
     return (
       <div className="my-orders-empty">
@@ -151,8 +250,11 @@ const MyOrders = () => {
           <div className="empty-icon">
             <PackageOpen size={64} />
           </div>
+
           <h2>No orders yet</h2>
-          <p>You haven't placed any orders. Time to satisfy your cravings!</p>
+
+          <p>You haven't placed any orders yet.</p>
+
           <button className="empty-action-btn" onClick={() => navigate("/")}>
             <ShoppingBag size={18} />
             Start Shopping
@@ -165,271 +267,241 @@ const MyOrders = () => {
   return (
     <div className="my-orders">
       <div className="my-orders-container">
-        {/* Header */}
+        {/* HEADER */}
         <div className="orders-header">
           <div className="header-left">
             <h1>My Orders</h1>
-            <p>Track and manage all your orders</p>
-          </div>
-          <div className="header-stats">
-            <div className="stat">
-              <span className="stat-value">{orders.length}</span>
-              <span className="stat-label">Total</span>
-            </div>
-            <div className="stat">
-              <span className="stat-value">
-                {orders.filter(o => o.status?.toLowerCase() === "delivered").length}
-              </span>
-              <span className="stat-label">Delivered</span>
-            </div>
-            <div className="stat">
-              <span className="stat-value">
-                {orders.filter(o => o.status?.toLowerCase() !== "delivered" && o.status?.toLowerCase() !== "cancelled").length}
-              </span>
-              <span className="stat-label">Active</span>
-            </div>
+
+            <p>Track and manage your orders</p>
           </div>
         </div>
 
-        {/* Search & Filter Bar */}
+        {/* TOOLBAR */}
         <div className="orders-toolbar">
           <div className="search-wrapper">
             <Search size={18} />
+
             <input
               type="text"
-              placeholder="Search by order ID or item..."
+              placeholder="Search orders..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+
             {searchTerm && (
               <button onClick={() => setSearchTerm("")}>
                 <X size={14} />
               </button>
             )}
           </div>
-          <div className="filter-wrapper">
-            <button
-              className={`filter-trigger ${showFilters ? 'active' : ''}`}
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter size={18} />
-              Filter
-              {statusFilter !== "all" && <span className="filter-dot"></span>}
-            </button>
-          </div>
+
+          <button
+            className={`filter-trigger ${showFilters ? "active" : ""}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={18} />
+            Filter
+          </button>
         </div>
 
-        {/* Filter Panel */}
+        {/* FILTERS */}
         {showFilters && (
           <div className="filter-panel">
-            <div className="filter-section">
-              <label>Status</label>
-              <div className="status-options">
+            <div className="status-options">
+              {[
+                "all",
+                "order placed",
+                "food processing",
+                "out for delivery",
+                "delivered",
+                "cancelled",
+              ].map((status) => (
                 <button
-                  className={`status-option ${statusFilter === "all" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("all")}
+                  key={status}
+                  className={`status-option ${
+                    statusFilter === status ? "active" : ""
+                  }`}
+                  onClick={() => setStatusFilter(status)}
                 >
-                  All
+                  {status}
                 </button>
-                <button
-                  className={`status-option ${statusFilter === "pending" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("pending")}
-                >
-                  Pending
-                </button>
-                <button
-                  className={`status-option ${statusFilter === "food processing" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("food processing")}
-                >
-                  Processing
-                </button>
-                <button
-                  className={`status-option ${statusFilter === "out for delivery" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("out for delivery")}
-                >
-                  Out for Delivery
-                </button>
-                <button
-                  className={`status-option ${statusFilter === "delivered" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("delivered")}
-                >
-                  Delivered
-                </button>
-                <button
-                  className={`status-option ${statusFilter === "cancelled" ? "active" : ""}`}
-                  onClick={() => setStatusFilter("cancelled")}
-                >
-                  Cancelled
-                </button>
-              </div>
+              ))}
             </div>
+
             {(searchTerm || statusFilter !== "all") && (
-              <div className="filter-actions">
-                <button className="clear-filters" onClick={clearFilters}>
-                  Clear all filters
-                </button>
-              </div>
+              <button className="clear-filters" onClick={clearFilters}>
+                Clear Filters
+              </button>
             )}
           </div>
         )}
 
-        {/* Results Info */}
-        {filteredOrders.length !== orders.length && (
-          <div className="results-info">
-            Showing {filteredOrders.length} of {orders.length} orders
-          </div>
-        )}
+        {/* ORDERS */}
+        <div className="orders-list">
+          {filteredOrders.map((order) => {
+            const statusConfig = getStatusConfig(getDisplayStatus(order));
 
-        {/* Orders List */}
-        {filteredOrders.length === 0 ? (
-          <div className="no-results">
-            <AlertCircle size={48} />
-            <h3>No matching orders</h3>
-            <p>Try adjusting your search or filters</p>
-            <button className="clear-filters-btn" onClick={clearFilters}>
-              Clear filters
-            </button>
-          </div>
-        ) : (
-          <div className="orders-list">
-            {filteredOrders.map((order) => {
-              const statusConfig = getStatusConfig(order.status);
-              const isExpanded = expandedOrder === order._id;
-              const totalItems = order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+            const isExpanded = expandedOrder === order._id;
 
-              return (
-                <div key={order._id} className="order-list-item">
-                  {/* Main Row */}
-                  <div className="order-row" onClick={() => toggleExpand(order._id)}>
-                    <div className="order-info">
-                      <div className="order-icon">
-                        <Package size={20} />
+            const totalItems =
+              order.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+
+            return (
+              <div key={order._id} className="order-list-item">
+                {/* ORDER ROW */}
+                <div
+                  className="order-row"
+                  onClick={() => toggleExpand(order._id)}
+                >
+                  <div className="order-info">
+                    <div className="order-icon">
+                      <Package size={20} />
+                    </div>
+
+                    <div className="order-details">
+                      <div className="order-id">
+                        <span className="label">Order</span>
+
+                        <span className="value">
+                          #{order._id.slice(-8).toUpperCase()}
+                        </span>
                       </div>
-                      <div className="order-details">
-                        <div className="order-id">
-                          <span className="label">Order</span>
-                          <span className="value">#{order._id.slice(-8).toUpperCase()}</span>
-                        </div>
-                        <div className="order-meta">
-                          <span className="date">
-                            <Calendar size={12} />
-                            {formatDate(order.date)}
-                          </span>
-                          <span className="items-count">
-                            {totalItems} {totalItems === 1 ? 'item' : 'items'}
-                          </span>
-                        </div>
+
+                      <div className="order-meta">
+                        <span className="date">
+                          <Calendar size={12} />
+                          {formatDate(order.date || order.createdAt)}
+                        </span>
+
+                        <span className="items-count">{totalItems} items</span>
                       </div>
-                    </div>
-
-                    <div className="order-amount">
-                      <span className="amount">Ksh {order.amount?.toLocaleString()}</span>
-                    </div>
-
-                    <div className={`order-status ${statusConfig.class}`}>
-                      {statusConfig.icon}
-                      <span>{statusConfig.label}</span>
-                    </div>
-
-                    <div className="order-expand">
-                      <ChevronDown size={18} className={isExpanded ? 'rotated' : ''} />
                     </div>
                   </div>
 
-                  {/* Expanded Details */}
-                  {isExpanded && (
-                    <div className="order-expanded">
-                      {/* Items List */}
-                      <div className="expanded-section">
-                        <h4>Order Items</h4>
-                        <div className="items-list">
-                          {order.items?.map((item, idx) => (
-                            <div key={idx} className="expanded-item">
-                              <div className="item-info">
-                                <span className="item-qty">{item.quantity}×</span>
-                                <span className="item-name">{item.name}</span>
-                              </div>
-                              <div className="item-price">
-                                Ksh {(item.price * item.quantity).toLocaleString()}
-                              </div>
+                  {/* ORDER AMOUNT */}
+                  <div className="order-amount">
+                    <span className="amount">
+                      Ksh {calculateOrderTotal(order.amount).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* STATUS */}
+                  <div className={`order-status ${statusConfig.class}`}>
+                    {statusConfig.icon}
+
+                    <span>{statusConfig.label}</span>
+                  </div>
+
+                  {/* EXPAND */}
+                  <div className="order-expand">
+                    <ChevronDown
+                      size={18}
+                      className={isExpanded ? "rotated" : ""}
+                    />
+                  </div>
+                </div>
+
+                {/* EXPANDED */}
+                {isExpanded && (
+                  <div className="order-expanded">
+                    {/* ITEMS */}
+                    <div className="expanded-section">
+                      <h4>Order Items</h4>
+
+                      <div className="items-list">
+                        {order.items?.map((item, idx) => (
+                          <div key={idx} className="expanded-item">
+                            <div className="item-info">
+                              <span className="item-qty">{item.quantity}×</span>
+
+                              <span className="item-name">{item.name}</span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
 
-                      {/* Delivery Info */}
-                      <div className="expanded-section">
-                        <h4>Delivery Details</h4>
-                        <div className="delivery-info">
-                          <div className="info-row">
-                            <MapPin size={14} />
-                            <span>
-                              {order.address?.street}, {order.address?.city}, {order.address?.state}
-                            </span>
-                          </div>
-                          <div className="info-row">
-                            <Calendar size={14} />
-                            <span>{new Date(order.date).toLocaleString()}</span>
-                          </div>
-                          {order.phone && (
-                            <div className="info-row">
-                              <span className="label">Contact:</span>
-                              <span>{order.phone}</span>
+                            <div className="item-price">
+                              Ksh{" "}
+                              {(item.price * item.quantity).toLocaleString()}
                             </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Payment Info */}
-                      <div className="expanded-section">
-                        <h4>Payment Summary</h4>
-                        <div className="payment-summary">
-                          <div className="summary-row">
-                            <span>Subtotal</span>
-                            <span>Ksh {order.amount?.toLocaleString()}</span>
                           </div>
-                          <div className="summary-row">
-                            <span>Delivery Fee</span>
-                            <span>Ksh 200</span>
-                          </div>
-                          <div className="summary-row total">
-                            <span>Total</span>
-                            <span>Ksh {(order.amount + 200).toLocaleString()}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="expanded-actions">
-                        <button
-                          className="action-btn primary"
-                          onClick={() => navigate(`/order-details/${order._id}`)}
-                        >
-                          <Eye size={16} />
-                          View Full Details
-                        </button>
-                        {order.status?.toLowerCase() === "delivered" && (
-                          <button
-                            className="action-btn secondary"
-                            onClick={() => navigate("/")}
-                          >
-                            <ShoppingBag size={16} />
-                            Reorder
-                          </button>
-                        )}
-                        {order.status?.toLowerCase() === "pending" && (
-                          <button className="action-btn danger">
-                            Cancel Order
-                          </button>
-                        )}
+                        ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+
+                    {/* DELIVERY */}
+                    <div className="expanded-section">
+                      <h4>Delivery Details</h4>
+
+                      <div className="delivery-info">
+                        <div className="info-row">
+                          <MapPin size={14} />
+
+                          <span>
+                            {order.address?.street}, {order.address?.city},{" "}
+                            {order.address?.state}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PAYMENT SUMMARY */}
+                    <div className="expanded-section">
+                      <h4>Payment Summary</h4>
+
+                      <div className="payment-summary">
+                        <div className="summary-row">
+                          <span>Subtotal</span>
+
+                          <span>Ksh {order.amount?.toLocaleString()}</span>
+                        </div>
+
+                        <div className="summary-row">
+                          <span>Delivery Fee</span>
+
+                          <span>Ksh {backendDeliveryFee.toLocaleString()}</span>
+                        </div>
+
+                        <div className="summary-row total">
+                          <span>Total</span>
+
+                          <span>
+                            Ksh{" "}
+                            {calculateOrderTotal(order.amount).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className="expanded-actions">
+                      <button
+                        className="action-btn primary"
+                        onClick={() => navigate(`/order-details/${order._id}`)}
+                      >
+                        <Eye size={16} />
+                        View Details
+                      </button>
+
+                      {order.status?.toLowerCase() === "delivered" && (
+                        <button
+                          className="action-btn secondary"
+                          onClick={() => navigate("/")}
+                        >
+                          <ShoppingBag size={16} />
+                          Reorder
+                        </button>
+                      )}
+
+                      {!isOrderPaid(order) && (
+                        <button className="action-btn danger">
+                          Cancel Order
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import AuditLogs from './pages/AuditLogs/AuditLogs';
 import Users from './pages/Users/Users';
 import Reviews from './pages/Reviews/Reviews';
 import Settings from './pages/Settings/Settings';
+import Payments from './pages/Payments/Payments';
 import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 
 const url = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
@@ -34,6 +35,7 @@ const ProtectedLayout = () => {
           <Route path="/audit-logs" element={<AuditLogs url={url} />} />
           <Route path="/users"   element={<Users url={url} />} />
           <Route path="/reviews" element={<Reviews url={url} />} />
+          <Route path="/payments" element={<Payments />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="*"        element={<Navigate to="/dashboard" replace />} />
@@ -56,4 +58,3 @@ const App = () => (
 );
 
 export default App;
-

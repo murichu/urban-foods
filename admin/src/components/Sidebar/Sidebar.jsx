@@ -4,6 +4,7 @@ import {
   ClipboardList,
   PlusCircle,
   Truck,
+  CreditCard,
   Users,
   MessageSquare,
   History,
@@ -15,6 +16,7 @@ import './Sidebar.css';
 const mainItems = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { to: '/orders', label: 'Orders', Icon: Truck },
+  { to: '/payments', label: 'Payments', Icon: CreditCard },
 ];
 
 const mgmtItems = [

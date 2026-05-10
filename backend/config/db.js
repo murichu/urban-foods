@@ -3,11 +3,28 @@ import logger from "./logger.js";
 
 export const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGOOSE_DB);
-    logger.info("DB Connected Successfully");
+    const mongoUri =
+      process.env.MONGOOSE_DB ||
+      (process.env.MONGODB_URL && process.env.MONGODB_NAME
+        ? `${process.env.MONGODB_URL}/${process.env.MONGODB_NAME}`
+        : undefined) ||
+      process.env.MONGODB_URI ||
+      process.env.MONGO_URI ||
+      process.env.DATABASE_URL;
+
+    if (!mongoUri) {
+      throw new Error(
+        "Missing MongoDB connection string. Set MONGOOSE_DB or MONGODB_URL and MONGODB_NAME in backend/.env."
+      );
+    }
+
+    await mongoose.connect(mongoUri);
+
+    logger.info("MongoDB Connected Successfully");
   } catch (error) {
-    logger.error(`Error connecting to the database: ${error.message}`);
-    // Optionally, you can exit the process if the connection fails
+    logger.error(`Database Connection Error: ${error.message}`);
+
+    // Exit application on failure
     process.exit(1);
   }
 };
